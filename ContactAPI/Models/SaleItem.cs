@@ -1,0 +1,19 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Contact.API.Models
+{
+    [Table("sale_items")]
+    public class SaleItem
+    {
+        [Key] public int Id { get; set; }
+
+        [Column("SaleId")] public int SaleId { get; set; }
+        [Column("Name")] public string Name { get; set; } = "";
+        [Column("Qty")] public int Qty { get; set; }
+        [Column("Price")] public decimal Price { get; set; }
+
+        // Навігація назад до хедеру (не обовʼязково використовувати, але корисно для Include)
+        public SaleHeader? Sale { get; set; }
+    }
+}

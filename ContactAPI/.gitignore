@@ -1,0 +1,28 @@
+# Visual Studio cache
+.vs/
+*.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+*.tmp
+*.temp
+
+# Entity Framework migrations backups
+Migrations/
+
+# OS junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Databases
+*.db
+
+# Other
+*.vsidx

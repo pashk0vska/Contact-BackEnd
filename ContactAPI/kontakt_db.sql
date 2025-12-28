@@ -2,8 +2,8 @@
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- Хост: 127.0.0.1:3307
--- Час створення: Лис 12 2025 р., 08:36
+-- Хост: 127.0.0.1:3306
+-- Час створення: Гру 28 2025 р., 14:05
 -- Версія сервера: 10.4.32-MariaDB
 -- Версія PHP: 8.2.12
 
@@ -63,7 +63,9 @@ INSERT INTO `clients` (`Id`, `FullName`, `Phone`, `Email`, `History`, `CreatedAt
 (31, 'Олена Романюк', '+380955667788', 'olena.rom@example.com', '', '2025-11-12 00:05:18'),
 (32, 'Назар Білий', '+380984445566', 'n.bilyi@example.com', '', '2025-11-12 00:05:18'),
 (33, 'Ірина Кравчук', '+380972223344', 'iryna.kravchuk@example.com', '', '2025-11-12 00:05:18'),
-(34, 'Петро Савчук', '+380638889900', 'p.savchuk@example.com', '', '2025-11-12 00:05:18');
+(34, 'Петро Савчук', '+380638889900', 'p.savchuk@example.com', '', '2025-11-12 00:05:18'),
+(35, 'Петро Замлин', '', '', '', '2025-12-25 10:26:13'),
+(36, 'Андрій Гертруда', '', '', '', '2025-12-25 10:38:35');
 
 -- --------------------------------------------------------
 
@@ -104,7 +106,8 @@ INSERT INTO `repairs` (`Id`, `ClientId`, `DeviceType`, `Model`, `Problem`, `Stat
 (17, 31, 'Ноутбук', 'Lenovo ThinkPad E14', 'Проблеми з Wi-Fi', 'done', 'Wi-Fi модуль', 600.000000000000000000000000000000, '2025-11-11 23:49:55.000000'),
 (18, 32, 'Телефон', 'Samsung S22', 'Не працює сенсор', 'canceled', 'Дисплей S22', 0.000000000000000000000000000000, '2025-11-11 23:49:55.000000'),
 (19, 33, 'Планшет', 'Huawei MediaPad M5', 'Розбите скло', 'progress', 'Скло планшета', 950.000000000000000000000000000000, '2025-11-11 23:49:55.000000'),
-(20, 34, 'Ноутбук', 'Apple MacBook Air M1', 'Проблема з клавіатурою', 'issued', 'Клавіатура оригінал', 4300.000000000000000000000000000000, '2025-11-11 23:49:55.000000');
+(20, 34, 'Ноутбук', 'Apple MacBook Air M1', 'Проблема з клавіатурою', 'issued', 'Клавіатура оригінал', 4300.000000000000000000000000000000, '2025-11-11 23:49:55.000000'),
+(21, 2, 'ПК', '', 'Замінити SSD', 'new', '', 2300.000000000000000000000000000000, '2025-12-24 22:00:00.000000');
 
 -- --------------------------------------------------------
 
@@ -141,7 +144,9 @@ INSERT INTO `sale_headers` (`Id`, `ClientId`, `ServiceId`, `Price`, `Date`, `Pay
 (11, 8, 0, 0.000000000000000000000000000000, '2025-11-01 15:30:00.000000', 'Картка', 'processing', '', 9000.00),
 (12, 9, 0, 0.000000000000000000000000000000, '2025-11-02 09:45:00.000000', 'Готівка', 'done', '', 6000.00),
 (13, 10, 0, 0.000000000000000000000000000000, '2025-11-03 17:10:00.000000', 'Картка', 'done', 'Знижка 5%', 9500.00),
-(15, 23, 0, 0.000000000000000000000000000000, '2025-11-11 03:00:00.000000', 'Готівка', 'done', '', 50.00);
+(15, 23, 0, 0.000000000000000000000000000000, '2025-11-11 03:00:00.000000', 'Готівка', 'done', '', 50.00),
+(16, 35, 0, 0.000000000000000000000000000000, '2025-12-24 22:00:00.000000', 'Готівка', 'done', '', 12000.00),
+(17, 36, 0, 0.000000000000000000000000000000, '2025-12-24 22:00:00.000000', 'Готівка', 'done', '', 23000.00);
 
 -- --------------------------------------------------------
 
@@ -174,7 +179,9 @@ INSERT INTO `sale_items` (`Id`, `SaleId`, `Name`, `Qty`, `Price`) VALUES
 (11, 11, 'Навушники Sony WH-CH720', 2, 4500.00),
 (12, 12, 'Бездротова колонка JBL Flip 6', 2, 3000.00),
 (13, 13, 'Павербанк Xiaomi 20000mAh', 5, 1900.00),
-(15, 15, 'Навушники', 1, 50.00);
+(15, 15, 'Навушники', 1, 50.00),
+(16, 16, 'Ноутбук Dell', 1, 12000.00),
+(17, 17, 'ПК', 1, 23000.00);
 
 -- --------------------------------------------------------
 
@@ -196,7 +203,9 @@ CREATE TABLE `services` (
 
 INSERT INTO `services` (`Id`, `Name`, `Description`, `Price`, `Category`) VALUES
 (1, 'Клавіатура Hator', '', 2600.000000000000000000000000000000, 'Repair'),
-(2, 'Навушники', '', 50.000000000000000000000000000000, 'Repair');
+(2, 'Навушники', '', 50.000000000000000000000000000000, 'Repair'),
+(3, 'Ноутбук Dell', '', 12000.000000000000000000000000000000, 'Repair'),
+(4, 'ПК', '', 23000.000000000000000000000000000000, 'Repair');
 
 -- --------------------------------------------------------
 
@@ -218,7 +227,7 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`Id`, `Username`, `PasswordHash`, `Email`, `Role`) VALUES
 (1, 'Anastasiia', 'C86+AWk8RDjXWMC+gYXb0mis8dHA8wH+Nrqyh0OFd9o=', 'anastasiya.pashkovska@kpk-lp.com.ua', 'admin'),
-(2, 'Admin', 'JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=', 'admin@gmail.com', 'admin'),
+(2, 'Admin', 'JfQ7FIatlaE5jj7rPYO8QBABX8yb7bNbQy4AKY1QIfc=', 'admin@gmail.com', 'admin'),
 (3, 'admin2', 'rA4w9wFClD0YYcfDY4yrdLSlg88kgVxalRFAjAhzvxE=', 'admin2@gmail.com', 'user');
 
 -- --------------------------------------------------------
@@ -294,31 +303,31 @@ ALTER TABLE `__efmigrationshistory`
 -- AUTO_INCREMENT для таблиці `clients`
 --
 ALTER TABLE `clients`
-  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
+  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT для таблиці `repairs`
 --
 ALTER TABLE `repairs`
-  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT для таблиці `sale_headers`
 --
 ALTER TABLE `sale_headers`
-  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT для таблиці `sale_items`
 --
 ALTER TABLE `sale_items`
-  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT для таблиці `services`
 --
 ALTER TABLE `services`
-  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `Id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT для таблиці `users`

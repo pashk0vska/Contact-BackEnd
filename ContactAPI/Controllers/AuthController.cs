@@ -24,6 +24,9 @@ namespace Contact.API.Controllers
         [HttpPost("login")]
         public IActionResult Login([FromBody] LoginRequest request)
         {
+            if (string.IsNullOrEmpty(request?.Username) || string.IsNullOrEmpty(request?.Password))
+                return BadRequest("Введіть логін і пароль.");
+
             var user = _context.Users.FirstOrDefault(u => u.Username == request.Username);
             if (user == null)
                 return Unauthorized("Користувача не знайдено");
@@ -38,9 +41,9 @@ namespace Contact.API.Controllers
 
             var claims = new[]
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Username),
-                new Claim("role", user.Role)
-            };
+        new Claim(JwtRegisteredClaimNames.Sub, user.Username),
+        new Claim("role", user.Role)
+    };
 
             var token = new JwtSecurityToken(
                 issuer: jwtSettings["Issuer"],
@@ -50,15 +53,14 @@ namespace Contact.API.Controllers
                 signingCredentials: creds
             );
 
-            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-
             return Ok(new
             {
-                accessToken = tokenString,
+                accessToken = new JwtSecurityTokenHandler().WriteToken(token),
                 username = user.Username,
                 role = user.Role
             });
         }
+
 
         // Просте хешування SHA256
         private string HashPassword(string password)

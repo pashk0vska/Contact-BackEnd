@@ -14,28 +14,29 @@ namespace Contact.API.Controllers
         private readonly AppDbContext _db;
         public DashboardController(AppDbContext db) => _db = db;
 
-        // межі "сьогодні" в UTC (бо SaleHeader.Date і Repairs.CreatedAt ми пишемо як UtcNow)
-        private static (DateTime fromUtc, DateTime toUtc) TodayUtc()
+        // Межі "сьогодні" по ЛОКАЛЬНОМУ календарному дню користувача,
+        // але повертаємо їх у UTC, бо в БД дати зберігаються в UTC.
+        private static (DateTime fromUtc, DateTime toUtc) TodayUtcByLocalDay()
         {
-            var nowUtc = DateTime.UtcNow;
-            var from = new DateTime(nowUtc.Year, nowUtc.Month, nowUtc.Day, 0, 0, 0, DateTimeKind.Utc);
-            return (from, from.AddDays(1));
+            var tz = TimeZoneInfo.Local;
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            var startLocal = nowLocal.Date; // 00:00 локального дня
+            var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
+            return (startUtc, startUtc.AddDays(1));
         }
 
-        // останні 7 днів (UTC)
-        private static (DateTime fromUtc, DateTime toUtc) Last7DaysUtc()
+        // Останні 7 днів (локальні дні), повертаємо межі в UTC
+        private static (DateTime fromUtc, DateTime toUtc) Last7DaysUtcByLocalDay()
         {
-            var (fromToday, toToday) = TodayUtc();
-            return (fromToday.AddDays(-6), toToday);
+            var (fromTodayUtc, toTodayUtc) = TodayUtcByLocalDay();
+            return (fromTodayUtc.AddDays(-6), toTodayUtc);
         }
 
-        // Підрахунок продажів за діапазон:
-        //  - кількість чеків
-        //  - сума: Total з headers + сума по items для тих, де Total == 0
-        private async Task<(int count, decimal sum)> SalesAggregate(DateTime fromUtc, DateTime toUtc)
+        // Підрахунок продажів за діапазон
+        private async Task<(int count, decimal sum)> SalesAggregate(DateTime from, DateTime to)
         {
             var headersRange = _db.SaleHeaders.AsNoTracking()
-                .Where(h => h.Date >= fromUtc && h.Date < toUtc);
+                .Where(h => h.Date >= from && h.Date < to);
 
             var count = await headersRange.CountAsync();
 
@@ -61,11 +62,11 @@ namespace Contact.API.Controllers
             return (count, sumFromHeaders + sumFromItems);
         }
 
-        // Підрахунок ремонтів за діапазон (кількість + сума TotalCost)
-        private async Task<(int count, decimal sum)> RepairsAggregate(DateTime fromUtc, DateTime toUtc)
+        // Підрахунок ремонтів за діапазон (кількість + сума)
+        private async Task<(int count, decimal sum)> RepairsAggregate(DateTime from, DateTime to)
         {
             var q = _db.Repairs.AsNoTracking()
-                .Where(r => r.CreatedAt >= fromUtc && r.CreatedAt < toUtc);
+                .Where(r => r.CreatedAt >= from && r.CreatedAt < to);
 
             var count = await q.CountAsync();
             var sum = await q.Select(r => (decimal?)r.TotalCost).SumAsync() ?? 0m;
@@ -75,8 +76,8 @@ namespace Contact.API.Controllers
         [HttpGet("summary")]
         public async Task<IActionResult> Summary()
         {
-            var (startToday, endToday) = TodayUtc();
-            var (start7, end7) = Last7DaysUtc();
+            var (startToday, endToday) = TodayUtcByLocalDay();
+            var (start7, end7) = Last7DaysUtcByLocalDay();
 
             // ПРОДАЖІ
             var (salesTodayCount, salesTodaySum) = await SalesAggregate(startToday, endToday);
@@ -124,7 +125,8 @@ namespace Contact.API.Controllers
                 clientsTotal = clientsTotal,
 
                 // таблиця
-                recent = recentSales.Select(x => new {
+                recent = recentSales.Select(x => new
+                {
                     name = x.ClientName,
                     item = x.ItemName ?? "",
                     price = x.Price

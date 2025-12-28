@@ -15,6 +15,20 @@ namespace Contact.API.Controllers
         private readonly AppDbContext _db;
         public SalesController(AppDbContext db) => _db = db;
 
+        // Normalize any incoming DateTime to UTC.
+        // - Utc: keep
+        // - Local: convert
+        // - Unspecified: treat as local (what browsers usually send for date-only values)
+        private static DateTime NormalizeToUtc(DateTime dt)
+        {
+            return dt.Kind switch
+            {
+                DateTimeKind.Utc => dt,
+                DateTimeKind.Local => dt.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime(),
+            };
+        }
+
         // ======== DTO + Query модель (GET) ========
         public record SalesQuery(
             string? q, string? sort = "Date", string? dir = "desc",
@@ -55,8 +69,10 @@ namespace Contact.API.Controllers
                 );
             }
 
-            if (rq.from.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date >= rq.from.Value);
-            if (rq.to.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date <= rq.to.Value);
+            // rq.from/to часто приходять як date-only (YYYY-MM-DD) => Kind.Unspecified.
+            // В БД дати зберігаємо в UTC, тому нормалізуємо межі до UTC.
+            if (rq.from.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date >= NormalizeToUtc(rq.from.Value));
+            if (rq.to.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date <= NormalizeToUtc(rq.to.Value));
             if (!string.IsNullOrWhiteSpace(rq.status))
             {
                 var s = rq.status.Trim().ToLower();
@@ -204,7 +220,8 @@ namespace Contact.API.Controllers
                 ClientId = clientId,
                 ServiceId = 0,
                 Price = 0,
-                Date = dto.Date == default ? DateTime.UtcNow : dto.Date,
+                // В БД зберігаємо UTC. Якщо з фронта прийде локальна/unspecified дата — нормалізуємо.
+                Date = dto.Date == default ? DateTime.UtcNow : NormalizeToUtc(dto.Date),
                 Payment = dto.Payment ?? "",
                 Status = dto.Status ?? "done",
                 Note = dto.Note,

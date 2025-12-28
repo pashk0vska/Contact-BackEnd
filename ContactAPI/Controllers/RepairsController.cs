@@ -15,6 +15,20 @@ namespace Contact.API.Controllers
         private readonly AppDbContext _db;
         public RepairsController(AppDbContext db) => _db = db;
 
+        // Normalize any incoming DateTime to UTC.
+        // - Utc: keep
+        // - Local: convert
+        // - Unspecified: treat as local (date-only inputs)
+        private static DateTime NormalizeToUtc(DateTime dt)
+        {
+            return dt.Kind switch
+            {
+                DateTimeKind.Utc => dt,
+                DateTimeKind.Local => dt.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime(),
+            };
+        }
+
         // ===== Query/DTO =====
         public record RepairsQuery(
             string? q,
@@ -67,8 +81,8 @@ namespace Contact.API.Controllers
             }
 
             // Фільтри
-            if (rq.from.HasValue) q0 = q0.Where(x => x.Date >= rq.from.Value);
-            if (rq.to.HasValue) q0 = q0.Where(x => x.Date <= rq.to.Value);
+            if (rq.from.HasValue) q0 = q0.Where(x => x.Date >= NormalizeToUtc(rq.from.Value));
+            if (rq.to.HasValue) q0 = q0.Where(x => x.Date <= NormalizeToUtc(rq.to.Value));
             if (!string.IsNullOrWhiteSpace(rq.status))
             {
                 var s = rq.status.Trim().ToLower();
@@ -162,7 +176,8 @@ namespace Contact.API.Controllers
             var r = new Repair
             {
                 ClientId = clientId,
-                CreatedAt = dto.Date == default ? DateTime.UtcNow : dto.Date, // ← правильне поле
+                // Зберігаємо дату в UTC. Якщо прийшла date-only/Unspecified - вважаємо локальним часом.
+                CreatedAt = dto.Date == default ? DateTime.UtcNow : NormalizeToUtc(dto.Date), // ← правильне поле
                 DeviceType = dto.Device,      // ← пишемо у DeviceType
                 Model = "",                   // поки не збираємо окремо
                 Problem = dto.Problem,

@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Contact.API.Data;
+using Contact.API.Helpers;
 using Contact.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,19 +16,7 @@ namespace Contact.API.Controllers
         private readonly AppDbContext _db;
         public RepairsController(AppDbContext db) => _db = db;
 
-        // Normalize any incoming DateTime to UTC.
-        // - Utc: keep
-        // - Local: convert
-        // - Unspecified: treat as local (date-only inputs)
-        private static DateTime NormalizeToUtc(DateTime dt)
-        {
-            return dt.Kind switch
-            {
-                DateTimeKind.Utc => dt,
-                DateTimeKind.Local => dt.ToUniversalTime(),
-                _ => DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime(),
-            };
-        }
+        // NormalizeToUtc видалено — використовуємо DateTimeHelper.NormalizeToUtc() (ліквідація дублювання)
 
         // ===== Query/DTO =====
         public record RepairsQuery(
@@ -59,12 +48,12 @@ namespace Contact.API.Controllers
                 select new
                 {
                     r.Id,
-                    Date = r.CreatedAt,                          // <-- правильне поле дати
-                    Device = (r.DeviceType ?? "") +              // <-- склеюємо тип + модель
+                    Date = r.CreatedAt,
+                    Device = (r.DeviceType ?? "") +
                              (string.IsNullOrWhiteSpace(r.Model) ? "" : " " + r.Model),
                     r.Problem,
                     r.Status,
-                    Price = r.TotalCost,                          // <-- правильне поле суми
+                    Price = r.TotalCost,
                     ClientName = c != null ? c.FullName : ""
                 };
 
@@ -80,9 +69,9 @@ namespace Contact.API.Controllers
                 );
             }
 
-            // Фільтри
-            if (rq.from.HasValue) q0 = q0.Where(x => x.Date >= NormalizeToUtc(rq.from.Value));
-            if (rq.to.HasValue) q0 = q0.Where(x => x.Date <= NormalizeToUtc(rq.to.Value));
+            // Фільтри — використовуємо DateTimeHelper замість локального методу
+            if (rq.from.HasValue) q0 = q0.Where(x => x.Date >= DateTimeHelper.NormalizeToUtc(rq.from.Value));
+            if (rq.to.HasValue) q0 = q0.Where(x => x.Date <= DateTimeHelper.NormalizeToUtc(rq.to.Value));
             if (!string.IsNullOrWhiteSpace(rq.status))
             {
                 var s = rq.status.Trim().ToLower();
@@ -91,7 +80,6 @@ namespace Contact.API.Controllers
             if (!string.IsNullOrWhiteSpace(rq.deviceType))
             {
                 var d = rq.deviceType.Trim().ToLower();
-                // фільтруємо по склеєному Device (містить і DeviceType, і Model)
                 q0 = q0.Where(x => (x.Device ?? "").ToLower().Contains(d));
             }
 
@@ -130,60 +118,38 @@ namespace Contact.API.Controllers
         public class RepairCreateDto
         {
             public int? ClientId { get; set; }
-            public string? ClientName { get; set; } // якщо ClientId немає — створимо/знайдемо за ім’ям
+            public string? ClientName { get; set; }
             public DateTime Date { get; set; }
-            public string Device { get; set; } = ""; // піде в DeviceType
+            public string Device { get; set; } = "";
             public string Problem { get; set; } = "";
-            public string Status { get; set; } = "new"; // new / progress / done / issued / canceled
-            public decimal Price { get; set; }          // піде в TotalCost
+            public string Status { get; set; } = "new";
+            public decimal Price { get; set; }
         }
 
         // ===== POST /api/Repairs =====
+        // Рефакторинг: використовуємо ClientResolver замість дубльованого коду
         [HttpPost]
         public async Task<IActionResult> CreateRepair([FromBody] RepairCreateDto dto)
         {
+            // Guard Clauses — валідація на початку
             if (dto == null) return BadRequest("Empty payload");
             if (string.IsNullOrWhiteSpace(dto.Device)) return BadRequest("Device is required");
             if (string.IsNullOrWhiteSpace(dto.Problem)) return BadRequest("Problem is required");
 
-            // resolve/create client
-            int clientId;
-            if (dto.ClientId.GetValueOrDefault() > 0)
-            {
-                clientId = dto.ClientId!.Value;
-            }
-            else
-            {
-                var name = (dto.ClientName ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(name)) return BadRequest("Client is required");
-
-                var existing = await _db.Clients
-                    .AsNoTracking()
-                    .Where(c => c.FullName.ToLower() == name.ToLower())
-                    .Select(c => new { c.Id })
-                    .FirstOrDefaultAsync();
-
-                if (existing != null) clientId = existing.Id;
-                else
-                {
-                    var newClient = new Client { FullName = name, Phone = "", Email = "", History = "" };
-                    _db.Clients.Add(newClient);
-                    await _db.SaveChangesAsync();
-                    clientId = newClient.Id;
-                }
-            }
+            // Резолвінг клієнта — використовуємо спільний хелпер (рефакторинг: ліквідація дублювання)
+            var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName);
+            if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
 
             var r = new Repair
             {
-                ClientId = clientId,
-                // Зберігаємо дату в UTC. Якщо прийшла date-only/Unspecified - вважаємо локальним часом.
-                CreatedAt = dto.Date == default ? DateTime.UtcNow : NormalizeToUtc(dto.Date), // ← правильне поле
-                DeviceType = dto.Device,      // ← пишемо у DeviceType
-                Model = "",                   // поки не збираємо окремо
+                ClientId = clientResult.ClientId,
+                CreatedAt = DateTimeHelper.NormalizeOrNow(dto.Date),
+                DeviceType = dto.Device,
+                Model = "",
                 Problem = dto.Problem,
                 Status = dto.Status ?? "new",
-                PartsUsed = "",               // поки не збираємо
-                TotalCost = dto.Price         // ← правильне поле
+                PartsUsed = "",
+                TotalCost = dto.Price
             };
 
             _db.Repairs.Add(r);

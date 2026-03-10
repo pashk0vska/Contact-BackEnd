@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Contact.API.Data;
+using Contact.API.Helpers;
 using Contact.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,20 +15,6 @@ namespace Contact.API.Controllers
     {
         private readonly AppDbContext _db;
         public SalesController(AppDbContext db) => _db = db;
-
-        // Normalize any incoming DateTime to UTC.
-        // - Utc: keep
-        // - Local: convert
-        // - Unspecified: treat as local (what browsers usually send for date-only values)
-        private static DateTime NormalizeToUtc(DateTime dt)
-        {
-            return dt.Kind switch
-            {
-                DateTimeKind.Utc => dt,
-                DateTimeKind.Local => dt.ToUniversalTime(),
-                _ => DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime(),
-            };
-        }
 
         // ======== DTO + Query модель (GET) ========
         public record SalesQuery(
@@ -69,10 +56,9 @@ namespace Contact.API.Controllers
                 );
             }
 
-            // rq.from/to часто приходять як date-only (YYYY-MM-DD) => Kind.Unspecified.
-            // В БД дати зберігаємо в UTC, тому нормалізуємо межі до UTC.
-            if (rq.from.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date >= NormalizeToUtc(rq.from.Value));
-            if (rq.to.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date <= NormalizeToUtc(rq.to.Value));
+            // Використовуємо DateTimeHelper замість приватного методу (рефакторинг: ліквідація дублювання)
+            if (rq.from.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date >= DateTimeHelper.NormalizeToUtc(rq.from.Value));
+            if (rq.to.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date <= DateTimeHelper.NormalizeToUtc(rq.to.Value));
             if (!string.IsNullOrWhiteSpace(rq.status))
             {
                 var s = rq.status.Trim().ToLower();
@@ -120,14 +106,14 @@ namespace Contact.API.Controllers
 
         public class SaleCreateDto
         {
-            public int? ClientId { get; set; }            // якщо є — використовуємо його
-            public string? ClientName { get; set; }       // якщо ClientId немає — шукаємо/створюємо по імені
+            public int? ClientId { get; set; }
+            public string? ClientName { get; set; }
             public DateTime Date { get; set; }
             public string Payment { get; set; } = "";
             public string Status { get; set; } = "done";
             public string? Note { get; set; }
             public SaleCreateItemDto Item { get; set; } = new();
-            public bool UpsertService { get; set; } = false; // якщо true — авто-додати в services
+            public bool UpsertService { get; set; } = false;
         }
 
         // GET: /api/Sales/recent?take=8
@@ -153,95 +139,89 @@ namespace Contact.API.Controllers
             return Ok(items);
         }
 
-
         // ======== POST /api/Sales ========
+        // Рефакторинг: метод розбито на менші кроки з використанням хелперів
         [HttpPost]
         public async Task<IActionResult> CreateSale([FromBody] SaleCreateDto dto)
         {
+            // 1. Валідація вхідних даних (Guard Clauses)
             if (dto == null) return BadRequest("Empty payload");
             if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name)) return BadRequest("Item is required");
             if (dto.Item.Qty <= 0) dto.Item.Qty = 1;
             if (dto.Item.Price < 0) dto.Item.Price = 0;
 
-            // 1) Визначаємо клієнта
-            int clientId;
-            if (dto.ClientId.GetValueOrDefault() > 0)
-            {
-                clientId = dto.ClientId!.Value;
-            }
-            else
-            {
-                var name = (dto.ClientName ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(name)) return BadRequest("Client is required");
+            // 2. Резолвінг клієнта — використовуємо ClientResolver (рефакторинг: ліквідація дублювання)
+            var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName);
+            if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
 
-                var existing = await _db.Clients
-                    .AsNoTracking()
-                    .Where(c => c.FullName.ToLower() == name.ToLower())
-                    .Select(c => new { c.Id })
-                    .FirstOrDefaultAsync();
-
-                if (existing != null) clientId = existing.Id;
-                else
-                {
-                    var newClient = new Client { FullName = name, Phone = "", Email = "", History = "" };
-                    _db.Clients.Add(newClient);
-                    await _db.SaveChangesAsync();
-                    clientId = newClient.Id;
-                }
-            }
-
-            // 2) (необовʼязково) додати сервіс, якщо його ще немає
+            // 3. Авто-додавання сервісу (виділений метод)
             if (dto.UpsertService)
+                await EnsureServiceExistsAsync(dto.Item.Name, dto.Item.Price);
+
+            // 4. Створення продажу
+            var header = await CreateSaleHeaderAsync(dto, clientResult.ClientId);
+            await CreateSaleItemAsync(header.Id, dto.Item);
+
+            return Ok(new { id = header.Id });
+        }
+
+        /// <summary>
+        /// Перевіряє існування сервісу і додає його, якщо немає.
+        /// Виділений метод (Extract Method) для підвищення читабельності CreateSale.
+        /// </summary>
+        private async Task EnsureServiceExistsAsync(string serviceName, decimal price)
+        {
+            var svcName = serviceName.Trim();
+            if (string.IsNullOrWhiteSpace(svcName)) return;
+
+            var exists = await _db.Services.AsNoTracking()
+                .AnyAsync(s => s.Name.ToLower() == svcName.ToLower());
+
+            if (!exists)
             {
-                var svcName = dto.Item.Name.Trim();
-                if (!string.IsNullOrWhiteSpace(svcName))
-                {
-                    var exists = await _db.Services.AsNoTracking()
-                        .AnyAsync(s => s.Name.ToLower() == svcName.ToLower());
-                    if (!exists)
-                    {
-                        // мінімальне створення сервісу з ціною
-                        var svc = new Service
-                        {
-                            Name = svcName,
-                            Price = dto.Item.Price
-                        };
-                        _db.Services.Add(svc);
-                        await _db.SaveChangesAsync();
-                    }
-                }
+                _db.Services.Add(new Service { Name = svcName, Price = price });
+                await _db.SaveChangesAsync();
             }
+        }
 
-            // 3) Створюємо продаж (хедер + один айтем)
-            var total = dto.Item.Price * dto.Item.Qty;
-
+        /// <summary>
+        /// Створює заголовок продажу (SaleHeader).
+        /// Виділений метод для розділення відповідальностей.
+        /// </summary>
+        private async Task<SaleHeader> CreateSaleHeaderAsync(SaleCreateDto dto, int clientId)
+        {
             var header = new SaleHeader
             {
                 ClientId = clientId,
                 ServiceId = 0,
                 Price = 0,
-                // В БД зберігаємо UTC. Якщо з фронта прийде локальна/unspecified дата — нормалізуємо.
-                Date = dto.Date == default ? DateTime.UtcNow : NormalizeToUtc(dto.Date),
+                Date = DateTimeHelper.NormalizeOrNow(dto.Date),
                 Payment = dto.Payment ?? "",
                 Status = dto.Status ?? "done",
                 Note = dto.Note,
-                Total = total
+                Total = dto.Item.Price * dto.Item.Qty
             };
 
             _db.SaleHeaders.Add(header);
             await _db.SaveChangesAsync();
+            return header;
+        }
 
+        /// <summary>
+        /// Створює елемент продажу (SaleItem).
+        /// Виділений метод для розділення відповідальностей.
+        /// </summary>
+        private async Task CreateSaleItemAsync(int saleId, SaleCreateItemDto itemDto)
+        {
             var item = new SaleItem
             {
-                SaleId = header.Id,
-                Name = dto.Item.Name,
-                Qty = dto.Item.Qty,
-                Price = dto.Item.Price
+                SaleId = saleId,
+                Name = itemDto.Name,
+                Qty = itemDto.Qty,
+                Price = itemDto.Price
             };
             _db.SaleItems.Add(item);
             await _db.SaveChangesAsync();
-
-            return Ok(new { id = header.Id });
         }
 
         // ==== DELETE /api/Sales/{id} ====
@@ -259,6 +239,4 @@ namespace Contact.API.Controllers
             return NoContent();
         }
     }
-
-
 }

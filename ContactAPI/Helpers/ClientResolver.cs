@@ -6,16 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Contact.API.Helpers
 {
-    /// <summary>
-    /// Допоміжний клас для пошуку або створення клієнта.
-    /// Логіка була продубльована у SalesController.CreateSale() та RepairsController.CreateRepair().
-    /// Після рефакторингу — єдине місце відповідальності (SRP).
-    /// </summary>
+    
     public static class ClientResolver
     {
-        /// <summary>
-        /// Результат резолвінгу клієнта.
-        /// </summary>
+       
         public class ResolveResult
         {
             public bool Success { get; set; }
@@ -23,10 +17,6 @@ namespace Contact.API.Helpers
             public string? ErrorMessage { get; set; }
         }
 
-        /// <summary>
-        /// Знаходить існуючого клієнта за Id, або шукає/створює за ім'ям.
-        /// Повертає ResolveResult з Id клієнта або повідомленням про помилку.
-        /// </summary>
         public static async Task<ResolveResult> ResolveOrCreateAsync(
             AppDbContext db, int? clientId, string? clientName)
         {

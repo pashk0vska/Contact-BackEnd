@@ -1,10 +1,9 @@
 using Contact.API.Data;
+using Contact.API.Helpers;
 using Contact.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Contact.API.Controllers
 {
@@ -19,9 +18,7 @@ namespace Contact.API.Controllers
             _context = context;
         }
 
-        // ---------------------- //
-        //  GET: api/users
-        // ---------------------- //
+        // GET: api/users
         [HttpGet]
         public IActionResult GetAll()
         {
@@ -29,21 +26,18 @@ namespace Contact.API.Controllers
             return Ok(users);
         }
 
-        // ---------------------- //
-        //  POST: api/users  (створення користувача)
-        // ---------------------- //
+        // POST: api/users (створення користувача)
         [HttpPost]
         public IActionResult CreateUser([FromBody] User user)
         {
             if (user == null)
                 return BadRequest("Некоректні дані користувача.");
 
-            // перевіряємо, чи існує користувач з таким ім’ям
             if (_context.Users.Any(u => u.Username == user.Username))
                 return Conflict("Користувач із таким логіном уже існує.");
 
-            // хешуємо пароль перед збереженням
-            user.PasswordHash = HashPassword(user.PasswordHash);
+            // Використовуємо PasswordHasher замість дубльованого приватного методу
+            user.PasswordHash = PasswordHasher.Hash(user.PasswordHash);
 
             _context.Users.Add(user);
             _context.SaveChanges();
@@ -58,33 +52,23 @@ namespace Contact.API.Controllers
             });
         }
 
-        // ---------------------- //
-        //  POST: api/users/reset-password  (оновлення пароля)
-        // ---------------------- //
+        // POST: api/users/reset-password (оновлення пароля)
         [HttpPost("reset-password")]
-        [AllowAnonymous] // на час розробки; пізніше можна прибрати
+        [AllowAnonymous]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
         {
             var user = await _context.Users.SingleOrDefaultAsync(u => u.Username == req.Username);
             if (user == null)
                 return NotFound("Користувача не знайдено.");
 
-            // використовуємо той самий SHA256-хешер, що й при створенні
-            user.PasswordHash = HashPassword(req.NewPassword);
+            // Використовуємо PasswordHasher замість дубльованого приватного методу
+            user.PasswordHash = PasswordHasher.Hash(req.NewPassword);
 
             await _context.SaveChangesAsync();
             return Ok(new { message = "Пароль оновлено" });
         }
 
-        // ---------------------- //
-        //  Хелпер для хешування
-        // ---------------------- //
-        private string HashPassword(string password)
-        {
-            using var sha256 = SHA256.Create();
-            var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-            return Convert.ToBase64String(bytes);
-        }
+        // HashPassword() ВИДАЛЕНО — використовуємо PasswordHasher.Hash() (ліквідація дублювання)
     }
 
     // DTO для запиту reset-password

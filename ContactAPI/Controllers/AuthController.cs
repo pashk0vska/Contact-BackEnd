@@ -64,10 +64,10 @@ namespace Contact.API.Controllers
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Username),
-                new Claim("role", user.Role)
-            };
+  {
+    new Claim(JwtRegisteredClaimNames.Sub, user.Username),
+    new Claim(ClaimTypes.Role, user.Role)
+};
 
             var token = new JwtSecurityToken(
                 issuer: jwtSettings["Issuer"],

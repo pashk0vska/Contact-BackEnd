@@ -12,12 +12,16 @@ namespace Contact.API.Controllers
     public class ClientsController : ControllerBase
     {
         private readonly AppDbContext _db;
-        public ClientsController(AppDbContext db) => _db = db;
+        private readonly ILogger<ClientsController> _logger;
 
-        // DTO для відповіді в списку
+        public ClientsController(AppDbContext db, ILogger<ClientsController> logger)
+        {
+            _db = db;
+            _logger = logger;
+        }
+
         public record ClientListItemDto(int Id, string FullName, string Phone, string Email);
 
-        // GET /api/Clients?q=&sort=FullName&dir=asc&page=1&pageSize=10
         [HttpGet]
         public async Task<IActionResult> List(
             [FromQuery] string? q = null,
@@ -25,15 +29,14 @@ namespace Contact.API.Controllers
             [FromQuery] string dir = "asc",
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10)
-
-
         {
             if (page <= 0) page = 1;
             if (pageSize <= 0 || pageSize > 100) pageSize = 10;
 
+            _logger.LogInformation("Отримання списку клієнтів. Сторінка: {Page}, Розмір: {PageSize}", page, pageSize);
+
             IQueryable<Client> query = _db.Clients.AsNoTracking();
 
-            // Пошук
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var term = q.Trim().ToLower();
@@ -44,7 +47,6 @@ namespace Contact.API.Controllers
                 );
             }
 
-            // Сортування
             bool desc = string.Equals(dir, "desc", StringComparison.OrdinalIgnoreCase);
             query = (sort?.ToLower()) switch
             {
@@ -57,7 +59,6 @@ namespace Contact.API.Controllers
             };
 
             var total = await query.CountAsync();
-
             var items = await query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -67,7 +68,6 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page, pageSize });
         }
 
-        // POST /api/Clients
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] Client model)
         {
@@ -78,36 +78,43 @@ namespace Contact.API.Controllers
 
             _db.Clients.Add(model);
             await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Створено клієнта: {FullName}", model.FullName);
             return Ok(new { id = model.Id });
         }
 
-        // PUT /api/Clients/{id}
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] Client model)
         {
             var entity = await _db.Clients.FindAsync(id);
-            if (entity == null) return NotFound();
+            if (entity == null)
+            {
+                _logger.LogWarning("Клієнта не знайдено для оновлення. Id: {Id}", id);
+                return NotFound();
+            }
 
             entity.FullName = model.FullName?.Trim() ?? entity.FullName;
             entity.Phone = model.Phone?.Trim() ?? entity.Phone;
             entity.Email = model.Email?.Trim() ?? entity.Email;
 
             await _db.SaveChangesAsync();
+            _logger.LogInformation("Оновлено клієнта. Id: {Id}", id);
             return NoContent();
-
-
         }
 
-        // DELETE /api/Clients/{id}
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete([FromRoute] int id)
         {
-
             var entity = await _db.Clients.FindAsync(id);
-            if (entity == null) return NotFound();
+            if (entity == null)
+            {
+                _logger.LogWarning("Клієнта не знайдено для видалення. Id: {Id}", id);
+                return NotFound();
+            }
 
             _db.Clients.Remove(entity);
             await _db.SaveChangesAsync();
+            _logger.LogInformation("Видалено клієнта. Id: {Id}", id);
             return NoContent();
         }
     }

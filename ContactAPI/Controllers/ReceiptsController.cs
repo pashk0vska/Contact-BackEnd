@@ -20,7 +20,7 @@ namespace Contact.API.Controllers
         {
             if (type == "sale")
             {
-                var sale = _context.Sales.Find(id);
+                var sale = _context.SaleHeaders.Find(id);
                 if (sale == null) return NotFound();
                 return Ok(new
                 {

@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Contact.API.Data;
 using Contact.API.Models;
 
@@ -6,6 +8,7 @@ namespace Contact.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class ServicesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -15,70 +18,68 @@ namespace Contact.API.Controllers
             _context = context;
         }
 
-        // GET: api/services
         [HttpGet]
-        public IActionResult GetAll() => Ok(_context.Services.ToList());
+        public async Task<IActionResult> GetAll()
+            => Ok(await _context.Services.ToListAsync());
 
-        // GET: api/services/category/Repair  або  /Sales
         [HttpGet("category/{category}")]
-        public IActionResult GetByCategory(string category)
+        public async Task<IActionResult> GetByCategory(string category)
         {
-            var list = _context.Services
+            var list = await _context.Services
                 .Where(s => s.Category.ToLower() == category.ToLower())
-                .ToList();
+                .ToListAsync();
             return Ok(list);
         }
 
-        // GET: api/services/5
         [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
-            var s = _context.Services.Find(id);
+            var s = await _context.Services.FindAsync(id);
             if (s == null) return NotFound();
             return Ok(s);
         }
 
-        // POST: api/services
         [HttpPost]
-        public IActionResult Create(Service service)
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Create(Service service)
         {
-            // Мінімальна валідація
-            if (string.IsNullOrWhiteSpace(service.Name)) return BadRequest("Name is required.");
-            if (service.Category != "Repair" && service.Category != "Sales") return BadRequest("Category must be 'Repair' or 'Sales'.");
+            if (string.IsNullOrWhiteSpace(service.Name))
+                return BadRequest("Name is required.");
+            if (service.Category != "Repair" && service.Category != "Sales")
+                return BadRequest("Category must be 'Repair' or 'Sales'.");
 
             _context.Services.Add(service);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(GetById), new { id = service.Id }, service);
         }
 
-        // PUT: api/services/5
         [HttpPut("{id}")]
-        public IActionResult Update(int id, Service updated)
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Update(int id, Service updated)
         {
-            var existing = _context.Services.Find(id);
+            var existing = await _context.Services.FindAsync(id);
             if (existing == null) return NotFound();
-
-            if (string.IsNullOrWhiteSpace(updated.Name)) return BadRequest("Name is required.");
-            if (updated.Category != "Repair" && updated.Category != "Sales") return BadRequest("Category must be 'Repair' or 'Sales'.");
+            if (string.IsNullOrWhiteSpace(updated.Name))
+                return BadRequest("Name is required.");
+            if (updated.Category != "Repair" && updated.Category != "Sales")
+                return BadRequest("Category must be 'Repair' or 'Sales'.");
 
             existing.Name = updated.Name;
             existing.Description = updated.Description;
             existing.Price = updated.Price;
             existing.Category = updated.Category;
-
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return Ok(existing);
         }
 
-        // DELETE: api/services/5
         [HttpDelete("{id}")]
-        public IActionResult Delete(int id)
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Delete(int id)
         {
-            var s = _context.Services.Find(id);
+            var s = await _context.Services.FindAsync(id);
             if (s == null) return NotFound();
-
             _context.Services.Remove(s);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return NoContent();
         }
     }

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Contact.API.Data;
 using Contact.API.Helpers;
 using Contact.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,14 +12,12 @@ namespace Contact.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class RepairsController : ControllerBase
     {
         private readonly AppDbContext _db;
         public RepairsController(AppDbContext db) => _db = db;
 
-        // NormalizeToUtc видалено — використовуємо DateTimeHelper.NormalizeToUtc() (ліквідація дублювання)
-
-        // ===== Query/DTO =====
         public record RepairsQuery(
             string? q,
             string? sort = "Date", string? dir = "desc",
@@ -37,7 +36,6 @@ namespace Contact.API.Controllers
             public decimal Price { get; set; }
         }
 
-        // ===== GET /api/Repairs =====
         [HttpGet]
         public async Task<IActionResult> GetRepairs([FromQuery] RepairsQuery rq)
         {
@@ -57,7 +55,6 @@ namespace Contact.API.Controllers
                     ClientName = c != null ? c.FullName : ""
                 };
 
-            // Пошук
             if (!string.IsNullOrWhiteSpace(rq.q))
             {
                 var q = rq.q.Trim().ToLower();
@@ -69,7 +66,6 @@ namespace Contact.API.Controllers
                 );
             }
 
-            // Фільтри — використовуємо DateTimeHelper замість локального методу
             if (rq.from.HasValue) q0 = q0.Where(x => x.Date >= DateTimeHelper.NormalizeToUtc(rq.from.Value));
             if (rq.to.HasValue) q0 = q0.Where(x => x.Date <= DateTimeHelper.NormalizeToUtc(rq.to.Value));
             if (!string.IsNullOrWhiteSpace(rq.status))
@@ -83,7 +79,6 @@ namespace Contact.API.Controllers
                 q0 = q0.Where(x => (x.Device ?? "").ToLower().Contains(d));
             }
 
-            // Сортування
             bool desc = string.Equals(rq.dir, "desc", StringComparison.OrdinalIgnoreCase);
             q0 = (rq.sort ?? "Date").ToLower() switch
             {
@@ -114,7 +109,6 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
-        // ===== DTO для створення ордера =====
         public class RepairCreateDto
         {
             public int? ClientId { get; set; }
@@ -126,17 +120,13 @@ namespace Contact.API.Controllers
             public decimal Price { get; set; }
         }
 
-        // ===== POST /api/Repairs =====
-        // Рефакторинг: використовуємо ClientResolver замість дубльованого коду
         [HttpPost]
         public async Task<IActionResult> CreateRepair([FromBody] RepairCreateDto dto)
         {
-            // Guard Clauses — валідація на початку
             if (dto == null) return BadRequest("Empty payload");
             if (string.IsNullOrWhiteSpace(dto.Device)) return BadRequest("Device is required");
             if (string.IsNullOrWhiteSpace(dto.Problem)) return BadRequest("Problem is required");
 
-            // Резолвінг клієнта — використовуємо спільний хелпер (рефакторинг: ліквідація дублювання)
             var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName);
             if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
 
@@ -157,7 +147,6 @@ namespace Contact.API.Controllers
             return Ok(new { id = r.Id });
         }
 
-        // ===== DELETE /api/Repairs/{id} =====
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteRepair(int id)
         {

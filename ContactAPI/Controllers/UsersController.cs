@@ -9,6 +9,7 @@ namespace Contact.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -18,16 +19,20 @@ namespace Contact.API.Controllers
             _context = context;
         }
 
-        // GET: api/users
+        // GET: api/users — тільки адміни
         [HttpGet]
+        [Authorize(Roles = "admin")]
         public IActionResult GetAll()
         {
-            var users = _context.Users.ToList();
+            var users = _context.Users
+                .Select(u => new { u.Id, u.Username, u.Email, u.Role })
+                .ToList();
             return Ok(users);
         }
 
-        // POST: api/users (створення користувача)
+        // POST: api/users — тільки адміни
         [HttpPost]
+        [Authorize(Roles = "admin")]
         public IActionResult CreateUser([FromBody] User user)
         {
             if (user == null)
@@ -36,9 +41,7 @@ namespace Contact.API.Controllers
             if (_context.Users.Any(u => u.Username == user.Username))
                 return Conflict("Користувач із таким логіном уже існує.");
 
-            // Використовуємо PasswordHasher замість дубльованого приватного методу
             user.PasswordHash = PasswordHasher.Hash(user.PasswordHash);
-
             _context.Users.Add(user);
             _context.SaveChanges();
 
@@ -52,7 +55,7 @@ namespace Contact.API.Controllers
             });
         }
 
-        // POST: api/users/reset-password (оновлення пароля)
+        // POST: api/users/reset-password — доступно без токена
         [HttpPost("reset-password")]
         [AllowAnonymous]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
@@ -61,16 +64,12 @@ namespace Contact.API.Controllers
             if (user == null)
                 return NotFound("Користувача не знайдено.");
 
-            // Використовуємо PasswordHasher замість дубльованого приватного методу
             user.PasswordHash = PasswordHasher.Hash(req.NewPassword);
-
             await _context.SaveChangesAsync();
+
             return Ok(new { message = "Пароль оновлено" });
         }
-
-        // HashPassword() ВИДАЛЕНО — використовуємо PasswordHasher.Hash() (ліквідація дублювання)
     }
 
-    // DTO для запиту reset-password
     public record ResetPasswordRequest(string Username, string NewPassword);
 }

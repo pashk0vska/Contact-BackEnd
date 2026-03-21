@@ -2,11 +2,13 @@
 using Microsoft.EntityFrameworkCore;
 using Contact.API.Data;
 using Contact.API.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Contact.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class ClientsController : ControllerBase
     {
         private readonly AppDbContext _db;

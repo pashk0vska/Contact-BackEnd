@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Contact.API.Data;
 using Contact.API.Helpers;
 using Contact.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,12 +12,12 @@ namespace Contact.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class SalesController : ControllerBase
     {
         private readonly AppDbContext _db;
         public SalesController(AppDbContext db) => _db = db;
 
-        // ======== DTO + Query модель (GET) ========
         public record SalesQuery(
             string? q, string? sort = "Date", string? dir = "desc",
             int page = 1, int pageSize = 8,
@@ -34,7 +35,6 @@ namespace Contact.API.Controllers
             public string Status { get; set; } = "";
         }
 
-        // ======== GET /api/Sales ========
         [HttpGet]
         public async Task<IActionResult> GetSales([FromQuery] SalesQuery rq)
         {
@@ -56,7 +56,6 @@ namespace Contact.API.Controllers
                 );
             }
 
-            // Використовуємо DateTimeHelper замість приватного методу (рефакторинг: ліквідація дублювання)
             if (rq.from.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date >= DateTimeHelper.NormalizeToUtc(rq.from.Value));
             if (rq.to.HasValue) baseQuery = baseQuery.Where(x => x.Header.Date <= DateTimeHelper.NormalizeToUtc(rq.to.Value));
             if (!string.IsNullOrWhiteSpace(rq.status))
@@ -96,7 +95,6 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
-        // ======== DTO для створення (POST) ========
         public class SaleCreateItemDto
         {
             public string Name { get; set; } = "";
@@ -116,7 +114,6 @@ namespace Contact.API.Controllers
             public bool UpsertService { get; set; } = false;
         }
 
-        // GET: /api/Sales/recent?take=8
         [HttpGet("recent")]
         public async Task<IActionResult> Recent([FromQuery] int take = 8)
         {
@@ -139,36 +136,26 @@ namespace Contact.API.Controllers
             return Ok(items);
         }
 
-        // ======== POST /api/Sales ========
-        // Рефакторинг: метод розбито на менші кроки з використанням хелперів
         [HttpPost]
         public async Task<IActionResult> CreateSale([FromBody] SaleCreateDto dto)
         {
-            // 1. Валідація вхідних даних (Guard Clauses)
             if (dto == null) return BadRequest("Empty payload");
             if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name)) return BadRequest("Item is required");
             if (dto.Item.Qty <= 0) dto.Item.Qty = 1;
             if (dto.Item.Price < 0) dto.Item.Price = 0;
 
-            // 2. Резолвінг клієнта — використовуємо ClientResolver (рефакторинг: ліквідація дублювання)
             var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName);
             if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
 
-            // 3. Авто-додавання сервісу (виділений метод)
             if (dto.UpsertService)
                 await EnsureServiceExistsAsync(dto.Item.Name, dto.Item.Price);
 
-            // 4. Створення продажу
             var header = await CreateSaleHeaderAsync(dto, clientResult.ClientId);
             await CreateSaleItemAsync(header.Id, dto.Item);
 
             return Ok(new { id = header.Id });
         }
 
-        /// <summary>
-        /// Перевіряє існування сервісу і додає його, якщо немає.
-        /// Виділений метод (Extract Method) для підвищення читабельності CreateSale.
-        /// </summary>
         private async Task EnsureServiceExistsAsync(string serviceName, decimal price)
         {
             var svcName = serviceName.Trim();
@@ -184,10 +171,6 @@ namespace Contact.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Створює заголовок продажу (SaleHeader).
-        /// Виділений метод для розділення відповідальностей.
-        /// </summary>
         private async Task<SaleHeader> CreateSaleHeaderAsync(SaleCreateDto dto, int clientId)
         {
             var header = new SaleHeader
@@ -207,10 +190,6 @@ namespace Contact.API.Controllers
             return header;
         }
 
-        /// <summary>
-        /// Створює елемент продажу (SaleItem).
-        /// Виділений метод для розділення відповідальностей.
-        /// </summary>
         private async Task CreateSaleItemAsync(int saleId, SaleCreateItemDto itemDto)
         {
             var item = new SaleItem
@@ -224,7 +203,6 @@ namespace Contact.API.Controllers
             await _db.SaveChangesAsync();
         }
 
-        // ==== DELETE /api/Sales/{id} ====
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteSale(int id)
         {

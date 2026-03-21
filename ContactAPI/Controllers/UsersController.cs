@@ -19,7 +19,6 @@ namespace Contact.API.Controllers
             _context = context;
         }
 
-        // GET: api/users — тільки адміни
         [HttpGet]
         [Authorize(Roles = "admin")]
         public IActionResult GetAll()
@@ -30,7 +29,6 @@ namespace Contact.API.Controllers
             return Ok(users);
         }
 
-        // POST: api/users — тільки адміни
         [HttpPost]
         [Authorize(Roles = "admin")]
         public IActionResult CreateUser([FromBody] User user)
@@ -55,14 +53,20 @@ namespace Contact.API.Controllers
             });
         }
 
-        // POST: api/users/reset-password — доступно без токена
         [HttpPost("reset-password")]
         [AllowAnonymous]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
         {
-            var user = await _context.Users.SingleOrDefaultAsync(u => u.Username == req.Username);
+            if (string.IsNullOrWhiteSpace(req.Username) ||
+                string.IsNullOrWhiteSpace(req.Email) ||
+                string.IsNullOrWhiteSpace(req.NewPassword))
+                return BadRequest("Заповніть всі поля.");
+
+            var user = await _context.Users.SingleOrDefaultAsync(u =>
+                u.Username == req.Username && u.Email == req.Email);
+
             if (user == null)
-                return NotFound("Користувача не знайдено.");
+                return NotFound("Користувача не знайдено або email не співпадає.");
 
             user.PasswordHash = PasswordHasher.Hash(req.NewPassword);
             await _context.SaveChangesAsync();
@@ -71,5 +75,5 @@ namespace Contact.API.Controllers
         }
     }
 
-    public record ResetPasswordRequest(string Username, string NewPassword);
+    public record ResetPasswordRequest(string Username, string Email, string NewPassword);
 }

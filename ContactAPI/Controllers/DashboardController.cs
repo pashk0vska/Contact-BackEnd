@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Contact.API.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,30 +10,42 @@ namespace Contact.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class DashboardController : ControllerBase
     {
         private readonly AppDbContext _db;
-        public DashboardController(AppDbContext db) => _db = db;
+        private readonly ILogger<DashboardController> _logger;
 
-        // Межі "сьогодні" по ЛОКАЛЬНОМУ календарному дню користувача,
-        // але повертаємо їх у UTC, бо в БД дати зберігаються в UTC.
+        public DashboardController(AppDbContext db, ILogger<DashboardController> logger)
+        {
+            _db = db;
+            _logger = logger;
+        }
+
         private static (DateTime fromUtc, DateTime toUtc) TodayUtcByLocalDay()
         {
             var tz = TimeZoneInfo.Local;
             var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            var startLocal = nowLocal.Date; // 00:00 локального дня
+            var startLocal = nowLocal.Date;
             var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
             return (startUtc, startUtc.AddDays(1));
         }
 
-        // Останні 7 днів (локальні дні), повертаємо межі в UTC
         private static (DateTime fromUtc, DateTime toUtc) Last7DaysUtcByLocalDay()
         {
             var (fromTodayUtc, toTodayUtc) = TodayUtcByLocalDay();
             return (fromTodayUtc.AddDays(-6), toTodayUtc);
         }
 
-        // Підрахунок продажів за діапазон
+        private static (DateTime fromUtc, DateTime toUtc) ThisMonthUtcByLocalDay()
+        {
+            var tz = TimeZoneInfo.Local;
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            var startLocal = new DateTime(nowLocal.Year, nowLocal.Month, 1);
+            var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
+            return (startUtc, startUtc.AddMonths(1));
+        }
+
         private async Task<(int count, decimal sum)> SalesAggregate(DateTime from, DateTime to)
         {
             var headersRange = _db.SaleHeaders.AsNoTracking()
@@ -62,7 +75,6 @@ namespace Contact.API.Controllers
             return (count, sumFromHeaders + sumFromItems);
         }
 
-        // Підрахунок ремонтів за діапазон (кількість + сума)
         private async Task<(int count, decimal sum)> RepairsAggregate(DateTime from, DateTime to)
         {
             var q = _db.Repairs.AsNoTracking()
@@ -76,16 +88,21 @@ namespace Contact.API.Controllers
         [HttpGet("summary")]
         public async Task<IActionResult> Summary()
         {
+            _logger.LogInformation("Отримання даних дашборду.");
+
             var (startToday, endToday) = TodayUtcByLocalDay();
             var (start7, end7) = Last7DaysUtcByLocalDay();
+            var (startMonth, endMonth) = ThisMonthUtcByLocalDay();
 
             // ПРОДАЖІ
             var (salesTodayCount, salesTodaySum) = await SalesAggregate(startToday, endToday);
             var (_, weekSalesSum) = await SalesAggregate(start7, end7);
+            var (salesMonthCount, salesMonthSum) = await SalesAggregate(startMonth, endMonth);
 
             // РЕМОНТИ
             var (repairsTodayCount, repairsTodaySum) = await RepairsAggregate(startToday, endToday);
             var (_, weekRepairsSum) = await RepairsAggregate(start7, end7);
+            var (repairsMonthCount, repairsMonthSum) = await RepairsAggregate(startMonth, endMonth);
 
             // КЛІЄНТИ
             var clientsTotal = await _db.Clients.AsNoTracking().CountAsync();
@@ -93,7 +110,13 @@ namespace Contact.API.Controllers
                 .Where(c => c.CreatedAt >= startToday && c.CreatedAt < endToday)
                 .CountAsync();
 
-            // ОСТАННІ ПРОДАЖІ (8 шт)
+            // РЕМОНТИ ПО СТАТУСАХ
+            var repairsByStatus = await _db.Repairs.AsNoTracking()
+                .GroupBy(r => r.Status)
+                .Select(g => new { status = g.Key, count = g.Count() })
+                .ToListAsync();
+
+            // ОСТАННІ ПРОДАЖІ
             var recentSales = await (
                 from h in _db.SaleHeaders.AsNoTracking()
                 join c0 in _db.Clients.AsNoTracking() on h.ClientId equals c0.Id into gc
@@ -115,16 +138,30 @@ namespace Contact.API.Controllers
 
             return Ok(new
             {
-                // KPI
+                // KPI сьогодні
                 salesToday = salesTodayCount,
                 profitSales = salesTodaySum,
-                incomeWeek = weekSalesSum + weekRepairsSum,
-                newClients = newClientsToday,
                 repairsToday = repairsTodayCount,
                 profitRepair = repairsTodaySum,
+                newClients = newClientsToday,
+
+                // KPI тиждень
+                incomeWeek = weekSalesSum + weekRepairsSum,
+
+                // KPI місяць
+                salesMonth = salesMonthCount,
+                salesMonthSum = salesMonthSum,
+                repairsMonth = repairsMonthCount,
+                repairsMonthSum = repairsMonthSum,
+                totalIncomeMonth = salesMonthSum + repairsMonthSum,
+
+                // Загальне
                 clientsTotal = clientsTotal,
 
-                // таблиця
+                // Статуси ремонтів
+                repairsByStatus = repairsByStatus,
+
+                // Таблиця останніх продажів
                 recent = recentSales.Select(x => new
                 {
                     name = x.ClientName,

@@ -211,6 +211,42 @@ namespace Contact.API.Controllers
             _db.SaleItems.Add(item);
             await _db.SaveChangesAsync();
         }
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> UpdateSale(int id, [FromBody] SaleCreateDto dto)
+        {
+            var header = await _db.SaleHeaders.FirstOrDefaultAsync(h => h.Id == id);
+            if (header == null)
+            {
+                _logger.LogWarning("Продаж не знайдено для оновлення. Id: {Id}", id);
+                return NotFound();
+            }
+
+            if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name))
+                return BadRequest("Item is required");
+
+            var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName);
+            if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
+
+            header.ClientId = clientResult.ClientId;
+            header.Date = DateTimeHelper.NormalizeOrNow(dto.Date);
+            header.Payment = dto.Payment ?? header.Payment;
+            header.Status = dto.Status ?? header.Status;
+            header.Note = dto.Note ?? header.Note;
+            header.Total = dto.Item.Price * dto.Item.Qty;
+
+            var existingItem = await _db.SaleItems.FirstOrDefaultAsync(i => i.SaleId == id);
+            if (existingItem != null)
+            {
+                existingItem.Name = dto.Item.Name;
+                existingItem.Qty = dto.Item.Qty;
+                existingItem.Price = dto.Item.Price;
+            }
+
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Оновлено продаж. Id: {Id}", id);
+            return NoContent();
+        }
 
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteSale(int id)

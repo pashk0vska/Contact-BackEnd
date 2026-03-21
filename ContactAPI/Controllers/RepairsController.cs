@@ -156,6 +156,32 @@ namespace Contact.API.Controllers
             _logger.LogInformation("Створено ремонт. Id: {Id}, Пристрій: {Device}", r.Id, r.DeviceType);
             return Ok(new { id = r.Id });
         }
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> UpdateRepair(int id, [FromBody] RepairCreateDto dto)
+        {
+            var r = await _db.Repairs.FirstOrDefaultAsync(x => x.Id == id);
+            if (r == null)
+            {
+                _logger.LogWarning("Ремонт не знайдено для оновлення. Id: {Id}", id);
+                return NotFound();
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.Device)) return BadRequest("Device is required");
+            if (string.IsNullOrWhiteSpace(dto.Problem)) return BadRequest("Problem is required");
+
+            r.DeviceType = dto.Device;
+            r.Problem = dto.Problem;
+            r.Status = dto.Status ?? r.Status;
+            r.TotalCost = dto.Price;
+
+            if (dto.Date != default)
+                r.CreatedAt = DateTimeHelper.NormalizeOrNow(dto.Date);
+
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Оновлено ремонт. Id: {Id}", id);
+            return NoContent();
+        }
 
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteRepair(int id)

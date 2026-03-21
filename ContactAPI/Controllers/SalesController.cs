@@ -16,7 +16,13 @@ namespace Contact.API.Controllers
     public class SalesController : ControllerBase
     {
         private readonly AppDbContext _db;
-        public SalesController(AppDbContext db) => _db = db;
+        private readonly ILogger<SalesController> _logger;
+
+        public SalesController(AppDbContext db, ILogger<SalesController> logger)
+        {
+            _db = db;
+            _logger = logger;
+        }
 
         public record SalesQuery(
             string? q, string? sort = "Date", string? dir = "desc",
@@ -38,6 +44,8 @@ namespace Contact.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetSales([FromQuery] SalesQuery rq)
         {
+            _logger.LogInformation("Отримання списку продажів. Сторінка: {Page}", rq.page);
+
             var baseQuery =
                 from h in _db.SaleHeaders.AsNoTracking()
                 join c0 in _db.Clients.AsNoTracking() on h.ClientId equals c0.Id into gc
@@ -153,6 +161,7 @@ namespace Contact.API.Controllers
             var header = await CreateSaleHeaderAsync(dto, clientResult.ClientId);
             await CreateSaleItemAsync(header.Id, dto.Item);
 
+            _logger.LogInformation("Створено продаж. Id: {Id}, Клієнт: {ClientId}", header.Id, clientResult.ClientId);
             return Ok(new { id = header.Id });
         }
 
@@ -207,13 +216,18 @@ namespace Contact.API.Controllers
         public async Task<IActionResult> DeleteSale(int id)
         {
             var header = await _db.SaleHeaders.FirstOrDefaultAsync(h => h.Id == id);
-            if (header == null) return NotFound();
+            if (header == null)
+            {
+                _logger.LogWarning("Продаж не знайдено для видалення. Id: {Id}", id);
+                return NotFound();
+            }
 
             var items = _db.SaleItems.Where(i => i.SaleId == id);
             _db.SaleItems.RemoveRange(items);
             _db.SaleHeaders.Remove(header);
-
             await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Видалено продаж. Id: {Id}", id);
             return NoContent();
         }
     }

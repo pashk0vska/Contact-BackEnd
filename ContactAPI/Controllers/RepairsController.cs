@@ -16,7 +16,13 @@ namespace Contact.API.Controllers
     public class RepairsController : ControllerBase
     {
         private readonly AppDbContext _db;
-        public RepairsController(AppDbContext db) => _db = db;
+        private readonly ILogger<RepairsController> _logger;
+
+        public RepairsController(AppDbContext db, ILogger<RepairsController> logger)
+        {
+            _db = db;
+            _logger = logger;
+        }
 
         public record RepairsQuery(
             string? q,
@@ -39,6 +45,8 @@ namespace Contact.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetRepairs([FromQuery] RepairsQuery rq)
         {
+            _logger.LogInformation("Отримання списку ремонтів. Сторінка: {Page}", rq.page);
+
             var q0 =
                 from r in _db.Repairs.AsNoTracking()
                 join c0 in _db.Clients.AsNoTracking() on r.ClientId equals c0.Id into gc
@@ -144,6 +152,8 @@ namespace Contact.API.Controllers
 
             _db.Repairs.Add(r);
             await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Створено ремонт. Id: {Id}, Пристрій: {Device}", r.Id, r.DeviceType);
             return Ok(new { id = r.Id });
         }
 
@@ -151,9 +161,16 @@ namespace Contact.API.Controllers
         public async Task<IActionResult> DeleteRepair(int id)
         {
             var r = await _db.Repairs.FirstOrDefaultAsync(x => x.Id == id);
-            if (r == null) return NotFound();
+            if (r == null)
+            {
+                _logger.LogWarning("Ремонт не знайдено для видалення. Id: {Id}", id);
+                return NotFound();
+            }
+
             _db.Repairs.Remove(r);
             await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Видалено ремонт. Id: {Id}", id);
             return NoContent();
         }
     }

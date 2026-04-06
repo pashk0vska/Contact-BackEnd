@@ -103,23 +103,41 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
-        public class SaleCreateItemDto
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetSaleById(int id)
         {
-            public string Name { get; set; } = "";
-            public int Qty { get; set; }
-            public decimal Price { get; set; }
-        }
+            var header = await _db.SaleHeaders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.Id == id);
 
-        public class SaleCreateDto
-        {
-            public int? ClientId { get; set; }
-            public string? ClientName { get; set; }
-            public DateTime Date { get; set; }
-            public string Payment { get; set; } = "";
-            public string Status { get; set; } = "done";
-            public string? Note { get; set; }
-            public SaleCreateItemDto Item { get; set; } = new();
-            public bool UpsertService { get; set; } = false;
+            if (header == null)
+            {
+                _logger.LogWarning("Продаж не знайдено. Id: {Id}", id);
+                return NotFound();
+            }
+
+            var client = await _db.Clients.FindAsync(header.ClientId);
+            var items = await _db.SaleItems
+                .AsNoTracking()
+                .Where(i => i.SaleId == id)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                header.Id,
+                header.Date,
+                header.Payment,
+                header.Status,
+                header.Note,
+                header.Total,
+                ClientName = client?.FullName ?? "",
+                Items = items.Select(i => new
+                {
+                    i.Name,
+                    i.Qty,
+                    i.Price
+                })
+            });
         }
 
         [HttpGet("recent")]
@@ -142,6 +160,25 @@ namespace Contact.API.Controllers
 
             var items = await q.Take(take).ToListAsync();
             return Ok(items);
+        }
+
+        public class SaleCreateItemDto
+        {
+            public string Name { get; set; } = "";
+            public int Qty { get; set; }
+            public decimal Price { get; set; }
+        }
+
+        public class SaleCreateDto
+        {
+            public int? ClientId { get; set; }
+            public string? ClientName { get; set; }
+            public DateTime Date { get; set; }
+            public string Payment { get; set; } = "";
+            public string Status { get; set; } = "done";
+            public string? Note { get; set; }
+            public SaleCreateItemDto Item { get; set; } = new();
+            public bool UpsertService { get; set; } = false;
         }
 
         [HttpPost]
@@ -211,6 +248,7 @@ namespace Contact.API.Controllers
             _db.SaleItems.Add(item);
             await _db.SaveChangesAsync();
         }
+
         [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateSale(int id, [FromBody] SaleCreateDto dto)
         {

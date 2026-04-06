@@ -117,6 +117,35 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetRepairById(int id)
+        {
+            var repair = await _db.Repairs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == id);
+
+            if (repair == null)
+            {
+                _logger.LogWarning("Ремонт не знайдено. Id: {Id}", id);
+                return NotFound();
+            }
+
+            var client = await _db.Clients.FindAsync(repair.ClientId);
+
+            return Ok(new
+            {
+                repair.Id,
+                repair.DeviceType,
+                repair.Model,
+                repair.Problem,
+                repair.Status,
+                repair.TotalCost,
+                repair.PartsUsed,
+                Date = repair.CreatedAt,
+                ClientName = client?.FullName ?? ""
+            });
+        }
+
         public class RepairCreateDto
         {
             public int? ClientId { get; set; }
@@ -156,6 +185,7 @@ namespace Contact.API.Controllers
             _logger.LogInformation("Створено ремонт. Id: {Id}, Пристрій: {Device}", r.Id, r.DeviceType);
             return Ok(new { id = r.Id });
         }
+
         [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateRepair(int id, [FromBody] RepairCreateDto dto)
         {

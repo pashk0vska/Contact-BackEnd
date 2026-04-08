@@ -1,148 +1,54 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Contact.API.Data;
-
+using Microsoft.AspNetCore.Mvc; using Microsoft.EntityFrameworkCore; using Contact.API.Data; using QuestPDF.Fluent; using QuestPDF.Helpers; using QuestPDF.Infrastructure;
 namespace Contact.API.Controllers
 {
-    /// <summary>
-    /// Аналітика за обраний період.
-    /// Дати в БД зберігаються в UTC. Межі періоду трактуються як локальні календарні дні,
-    /// але переводяться в UTC для запитів до БД.
-    /// </summary>
-    [ApiController]
-    [Route("api/[controller]")]
+    [ApiController][Route("api/[controller]")]
     public class AnalyticsController : ControllerBase
     {
         private readonly AppDbContext _db;
+        public AnalyticsController(AppDbContext db)=>_db=db;
 
-        public AnalyticsController(AppDbContext db) => _db = db;
-
-        /// <summary>
-        /// Повертає KPI за період та ТОП-10 товарів/послуг (по продажах).
-        /// 
-        /// GET /api/Analytics/summary?from=2025-12-01&to=2025-12-25&type=all
-        /// type: all | sales | repairs
-        /// </summary>
         [HttpGet("summary")]
-        public async Task<IActionResult> Summary([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? type)
+        public async Task<IActionResult> Summary([FromQuery] DateTime? from,[FromQuery] DateTime? to,[FromQuery] string? type)
         {
-            var tz = TimeZoneInfo.Local;
-            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-
-            // Якщо користувач не обрав період, беремо останні 30 днів (включно) по локальному календарю.
-            var startLocal = (from?.Date ?? nowLocal.Date.AddDays(-29));
-            var endLocalExclusive = (to?.Date ?? nowLocal.Date).AddDays(1);
-
-            var startUtc = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
-            var endUtc = TimeZoneInfo.ConvertTimeToUtc(endLocalExclusive, tz);
-
-            var mode = (type ?? "all").Trim().ToLowerInvariant();
-            var includeSales = mode == "all" || mode == "sales";
-            var includeRepairs = mode == "all" || mode == "repairs";
-
-            // SALES
-            var salesQuery = _db.SaleHeaders.AsNoTracking()
-                .Where(h => h.Date >= startUtc && h.Date < endUtc);
-
-            var salesCount = includeSales ? await salesQuery.CountAsync() : 0;
-            var salesRevenue = includeSales
-                ? await salesQuery.Select(h => (decimal?)h.Total).SumAsync() ?? 0m
-                : 0m;
-
-            // REPAIRS
-            var repairsQuery = _db.Repairs.AsNoTracking()
-                .Where(r => r.CreatedAt >= startUtc && r.CreatedAt < endUtc);
-
-            var repairsCount = includeRepairs ? await repairsQuery.CountAsync() : 0;
-            var repairsRevenue = includeRepairs
-                ? await repairsQuery.Select(r => (decimal?)r.TotalCost).SumAsync() ?? 0m
-                : 0m;
-
-            // CLIENTS
-            var newClients = await _db.Clients.AsNoTracking()
-                .Where(c => c.CreatedAt >= startUtc && c.CreatedAt < endUtc)
-                .CountAsync();
-
-            var income = salesRevenue + repairsRevenue;
-            var avgCheck = salesCount > 0 ? decimal.Round(salesRevenue / salesCount, 2) : 0m;
-
-            // TOP-10 products in selected range.
-            // NOTE: Some EF Core + MySQL/MariaDB providers can't translate complex GroupBy+Sum.
-            // We fetch minimal rows first, then aggregate in-memory (safe + stable for this mini-CRM).
-            List<TopItemDto> topItems;
-            if (includeSales)
-            {
-                var rows = await (
-                    from si in _db.SaleItems.AsNoTracking()
-                    join h in _db.SaleHeaders.AsNoTracking() on si.SaleId equals h.Id
-                    where h.Date >= startUtc && h.Date < endUtc
-                    select new { si.Name, si.Qty, si.Price }
-                ).ToListAsync();
-
-                topItems = rows
-                    .GroupBy(x => x.Name)
-                    .Select(g => new TopItemDto
-                    {
-                        name = g.Key,
-                        qty = g.Sum(x => x.Qty),
-                        sum = g.Sum(x => (decimal)x.Price * x.Qty)
-                    })
-                    .OrderByDescending(x => x.sum)
-                    .Take(10)
-                    .ToList();
-            }
-            else
-            {
-                topItems = new List<TopItemDto>();
-            }
-
-            // Try to enrich category by matching to Services.Name
-            var serviceByName = await _db.Services.AsNoTracking()
-                .Select(s => new { s.Name, s.Category })
-                .ToListAsync();
-
-            string GetCategory(string itemName)
-            {
-                var hit = serviceByName.FirstOrDefault(x => x.Name == itemName);
-                return hit?.Category ?? "Продажі";
-            }
-
-            return Ok(new
-            {
-                period = new
-                {
-                    from = startLocal.ToString("yyyy-MM-dd"),
-                    to = endLocalExclusive.AddDays(-1).ToString("yyyy-MM-dd"),
-                    type = mode
-                },
-                kpi = new
-                {
-                    income,
-                    salesCount,
-                    repairsCount,
-                    avgCheck,
-                    profitEstimate = income, // як і на дашборді: "прибуток" = сума за період
-                    newClients
-                },
-                topProducts = topItems.Select(x => new
-                {
-                    product = x.name,
-                    category = GetCategory(x.name),
-                    qty = x.qty,
-                    sum = x.sum
-                }).ToList()
-            });
+            var tz=TimeZoneInfo.Local;var nl=TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,tz);
+            var startLocal=(from?.Date??nl.Date.AddDays(-29));var endLE=(to?.Date??nl.Date).AddDays(1);
+            var startUtc=TimeZoneInfo.ConvertTimeToUtc(startLocal,tz);var endUtc=TimeZoneInfo.ConvertTimeToUtc(endLE,tz);
+            var mode=(type??"all").Trim().ToLowerInvariant();var incS=mode=="all"||mode=="sales";var incR=mode=="all"||mode=="repairs";
+            var salesQ=_db.SaleHeaders.AsNoTracking().Where(h=>h.Date>=startUtc&&h.Date<endUtc);
+            var salesCount=incS?await salesQ.CountAsync():0;var salesRev=incS?await salesQ.Select(h=>(decimal?)h.Total).SumAsync()??0m:0m;
+            var repQ=_db.Repairs.AsNoTracking().Where(r=>r.CreatedAt>=startUtc&&r.CreatedAt<endUtc);
+            var repCount=incR?await repQ.CountAsync():0;var repRev=incR?await repQ.Select(r=>(decimal?)r.TotalCost).SumAsync()??0m:0m;
+            var newCl=await _db.Clients.AsNoTracking().Where(c=>c.CreatedAt>=startUtc&&c.CreatedAt<endUtc).CountAsync();
+            var income=salesRev+repRev;var avgCheck=salesCount>0?decimal.Round(salesRev/salesCount,2):0m;
+            List<object> topItems=new();
+            if(incS){var rows=await(from si in _db.SaleItems.AsNoTracking() join h in _db.SaleHeaders.AsNoTracking() on si.SaleId equals h.Id where h.Date>=startUtc&&h.Date<endUtc select new{si.Name,si.Qty,si.Price}).ToListAsync();
+                topItems=rows.GroupBy(x=>x.Name).Select(g=>new{product=g.Key,category="Продажі",qty=g.Sum(x=>x.Qty),sum=g.Sum(x=>(decimal)x.Price*x.Qty)}).OrderByDescending(x=>x.sum).Take(10).Cast<object>().ToList();}
+            return Ok(new{period=new{from=startLocal.ToString("yyyy-MM-dd"),to=endLE.AddDays(-1).ToString("yyyy-MM-dd"),type=mode},kpi=new{income,salesCount,repairsCount=repCount,avgCheck,profitEstimate=income,newClients=newCl},topProducts=topItems});
         }
-    }
 
-    public class TopItemDto
-    {
-        public string name { get; set; } = "";
-        public int qty { get; set; }
-        public decimal sum { get; set; }
+        [HttpGet("report-pdf")]
+        public async Task<IActionResult> ReportPdf([FromQuery] DateTime? from,[FromQuery] DateTime? to,[FromQuery] string? type)
+        {
+            var tz=TimeZoneInfo.Local;var nl=TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,tz);
+            var startLocal=(from?.Date??nl.Date.AddDays(-29));var endLE=(to?.Date??nl.Date).AddDays(1);
+            var startUtc=TimeZoneInfo.ConvertTimeToUtc(startLocal,tz);var endUtc=TimeZoneInfo.ConvertTimeToUtc(endLE,tz);
+            var mode=(type??"all").Trim().ToLowerInvariant();var incS=mode=="all"||mode=="sales";var incR=mode=="all"||mode=="repairs";
+            var salesQ=_db.SaleHeaders.AsNoTracking().Where(h=>h.Date>=startUtc&&h.Date<endUtc);
+            var salesCount=incS?await salesQ.CountAsync():0;var salesRev=incS?await salesQ.Select(h=>(decimal?)h.Total).SumAsync()??0m:0m;
+            var repQ=_db.Repairs.AsNoTracking().Where(r=>r.CreatedAt>=startUtc&&r.CreatedAt<endUtc);
+            var repCount=incR?await repQ.CountAsync():0;var repRev=incR?await repQ.Select(r=>(decimal?)r.TotalCost).SumAsync()??0m:0m;
+            var income=salesRev+repRev;
+            QuestPDF.Settings.License=LicenseType.Community;
+            var pdf=Document.Create(container=>{container.Page(page=>{page.Size(PageSizes.A4);page.Margin(2,Unit.Centimetre);page.DefaultTextStyle(x=>x.FontSize(12));
+                page.Header().Column(col=>{col.Item().Text("Kontakt — Зведений звіт").FontSize(20).Bold().AlignCenter();col.Item().Text($"Період: {startLocal:dd.MM.yyyy} — {endLE.AddDays(-1):dd.MM.yyyy}").FontSize(14).AlignCenter();col.Item().PaddingTop(10).LineHorizontal(1);});
+                page.Content().PaddingVertical(10).Column(col=>{
+                    col.Item().Text("KPI").Bold().FontSize(16);
+                    col.Item().Text($"Загальний дохід: {income:N2} грн");
+                    col.Item().Text($"Продажів: {salesCount} (₴{salesRev:N2})");
+                    col.Item().Text($"Ремонтів: {repCount} (₴{repRev:N2})");
+                });
+                page.Footer().AlignCenter().Text($"Згенеровано: {DateTime.Now:dd.MM.yyyy HH:mm}");});});
+            return File(pdf.GeneratePdf(),"application/pdf",$"report.pdf");
+        }
     }
 }

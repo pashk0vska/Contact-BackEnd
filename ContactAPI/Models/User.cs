@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-
+using System.ComponentModel.DataAnnotations;
 namespace Contact.API.Models
 {
     public class User
@@ -9,5 +8,6 @@ namespace Contact.API.Models
         public string Email { get; set; } = "";
         public string PasswordHash { get; set; } = "";
         public string? Role { get; set; }
+        public string? RecoveryKeys { get; set; } // comma-separated hashed keys
     }
 }

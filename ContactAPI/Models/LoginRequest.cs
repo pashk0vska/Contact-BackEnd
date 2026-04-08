@@ -1,8 +1,1 @@
-﻿namespace Contact.API.Models
-{
-    public class LoginRequest
-    {
-        public string Username { get; set; }
-        public string Password { get; set; }
-    }
-}
+namespace Contact.API.Models { public class LoginRequest { public string Username { get; set; } public string Password { get; set; } } }

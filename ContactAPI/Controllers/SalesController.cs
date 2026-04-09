@@ -41,8 +41,18 @@ namespace Contact.API.Controllers
         }
 
         public class SaleCreateItemDto { public string Name{get;set;}=""; public int Qty{get;set;} public decimal Price{get;set;} }
-        public class SaleCreateDto { public int? ClientId{get;set;} public string? ClientName{get;set;} public string? ClientPhone{get;set;} public DateTime Date{get;set;} public string Payment{get;set;}=""; public string Status{get;set;}="done"; public string? Note{get;set;} public SaleCreateItemDto Item{get;set;}=new(); public string? ClientPhone{get;set;}
-            public bool UpsertService{get;set;}=false; }
+        public class SaleCreateDto
+        {
+            public int? ClientId { get; set; }
+            public string? ClientName { get; set; }
+            public string? ClientPhone { get; set; }
+            public DateTime Date { get; set; }
+            public string Payment { get; set; } = "";
+            public string Status { get; set; } = "done";
+            public string? Note { get; set; }
+            public SaleCreateItemDto Item { get; set; } = new();
+        }
+        public bool UpsertService{get;set;}=false;
 
         [HttpPost]
         public async Task<IActionResult> CreateSale([FromBody] SaleCreateDto dto)

@@ -34,7 +34,17 @@ namespace Contact.API.Controllers
             return Ok(new { repair.Id, repair.DeviceType, repair.Model, repair.Problem, repair.Status, repair.TotalCost, repair.PartsUsed, Date = repair.CreatedAt, ClientName = client?.FullName ?? "" });
         }
 
-        public class RepairCreateDto { public int? ClientId { get; set; } public string? ClientName { get; set; } public string? ClientPhone { get; set; } public DateTime Date { get; set; } public string Device { get; set; } = ""; public string Problem { get; set; } = ""; public string Status { get; set; } = "new"; public decimal Price { get; set; } public string? ClientPhone { get; set; } }
+        public class RepairCreateDto
+        {
+            public int? ClientId { get; set; }
+            public string? ClientName { get; set; }
+            public string? ClientPhone { get; set; }
+            public DateTime Date { get; set; }
+            public string Device { get; set; } = "";
+            public string Problem { get; set; } = "";
+            public string Status { get; set; } = "new";
+            public decimal Price { get; set; }
+        }
 
         [HttpPost]
         public async Task<IActionResult> CreateRepair([FromBody] RepairCreateDto dto)

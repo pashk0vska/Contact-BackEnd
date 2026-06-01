@@ -1,29 +1,16 @@
-# Visual Studio cache
+@"
+# Build
+bin/
+obj/
+
+# Visual Studio
 .vs/
-*.vscode/
 *.user
 *.suo
-*.userosscache
-*.sln.docstates
 
-# Build results
-[Bb]in/
-[Oo]bj/
-[Ll]og/
-*.tmp
-*.temp
+# Logs
+*.log
 
-# Entity Framework migrations backups
-Migrations/
-
-# OS junk
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Databases
-*.db
-
-# Other
-*.vsidx
-
+# Temp
+files.txt
+"@ | Out-File -FilePath D:\rep\Contact-BackEnd\.gitignore -Encoding utf8

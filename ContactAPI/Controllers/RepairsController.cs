@@ -9,6 +9,7 @@ namespace Contact.API.Controllers
         public record RepairsQuery(string? q, string? sort = "Date", string? dir = "desc", int page = 1, int pageSize = 8, DateTime? from = null, DateTime? to = null, string? status = null, string? deviceType = null);
         public class RepairListItemDto { public int Id { get; set; } public DateTime Date { get; set; } public string ClientName { get; set; } = ""; public string Device { get; set; } = ""; public string Problem { get; set; } = ""; public string Status { get; set; } = ""; public decimal Price { get; set; } public string? ClientPhone { get; set; } }
 
+        // Всі ролі можуть переглядати
         [HttpGet]
         public async Task<IActionResult> GetRepairs([FromQuery] RepairsQuery rq)
         {
@@ -26,6 +27,7 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
+        // Всі ролі можуть переглядати деталі
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetRepairById(int id)
         {
@@ -46,15 +48,44 @@ namespace Contact.API.Controllers
             public decimal Price { get; set; }
         }
 
+        // Всі ролі можуть створювати ремонти
         [HttpPost]
         public async Task<IActionResult> CreateRepair([FromBody] RepairCreateDto dto)
         {
+<<<<<<< HEAD
             if (dto == null) return BadRequest("Empty payload"); if (string.IsNullOrWhiteSpace(dto.Device)) return BadRequest("Device is required"); if (string.IsNullOrWhiteSpace(dto.Problem)) return BadRequest("Problem is required");
             var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone); if (!cr.Success) return BadRequest(cr.ErrorMessage);
             var r = new Repair { ClientId = cr.ClientId, CreatedAt = DateTimeHelper.NormalizeOrNow(dto.Date), DeviceType = dto.Device, Model = "", Problem = dto.Problem, Status = dto.Status ?? "new", PartsUsed = "", TotalCost = dto.Price };
             _db.Repairs.Add(r); await _db.SaveChangesAsync(); return Ok(new { id = r.Id });
+=======
+            if (dto == null) return BadRequest("Empty payload");
+            if (string.IsNullOrWhiteSpace(dto.Device)) return BadRequest("Device is required");
+            if (string.IsNullOrWhiteSpace(dto.Problem)) return BadRequest("Problem is required");
+
+            var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
+            if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
+
+            var r = new Repair
+            {
+                ClientId = clientResult.ClientId,
+                CreatedAt = DateTimeHelper.NormalizeOrNow(dto.Date),
+                DeviceType = dto.Device,
+                Model = "",
+                Problem = dto.Problem,
+                Status = dto.Status ?? "new",
+                PartsUsed = "",
+                TotalCost = dto.Price
+            };
+
+            _db.Repairs.Add(r);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Створено ремонт. Id: {Id}, Пристрій: {Device}", r.Id, r.DeviceType);
+            return Ok(new { id = r.Id });
+>>>>>>> f98bf5a (chore: cleanup gitignore, remove build artifacts)
         }
 
+        // Всі ролі можуть редагувати ремонти
         [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateRepair(int id, [FromBody] RepairCreateDto dto)
         {
@@ -65,7 +96,9 @@ namespace Contact.API.Controllers
             await _db.SaveChangesAsync(); return NoContent();
         }
 
+        // Тільки superadmin та admin можуть видаляти
         [HttpDelete("{id:int}")]
+        [Authorize(Roles = "superadmin,admin")]
         public async Task<IActionResult> DeleteRepair(int id)
         {
             var r = await _db.Repairs.FirstOrDefaultAsync(x => x.Id == id); if (r == null) return NotFound();

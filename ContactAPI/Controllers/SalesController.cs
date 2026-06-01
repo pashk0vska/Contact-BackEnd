@@ -9,6 +9,7 @@ namespace Contact.API.Controllers
         public record SalesQuery(string? q, string? sort = "Date", string? dir = "desc", int page = 1, int pageSize = 8, DateTime? from = null, DateTime? to = null, string? status = null);
         public class SaleListItemDto { public int Id{get;set;} public DateTime Date{get;set;} public string ClientName{get;set;}="" ; public string ProductName{get;set;}=""; public int Quantity{get;set;} public decimal TotalPrice{get;set;} public string Payment{get;set;}=""; public string Status{get;set;}=""; }
 
+        // Всі ролі можуть переглядати
         [HttpGet]
         public async Task<IActionResult> GetSales([FromQuery] SalesQuery rq)
         {
@@ -24,14 +25,47 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
+        // Всі ролі можуть переглядати деталі
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetSaleById(int id)
         {
+<<<<<<< HEAD
             var header = await _db.SaleHeaders.AsNoTracking().FirstOrDefaultAsync(h => h.Id == id); if (header == null) return NotFound();
             var client = await _db.Clients.FindAsync(header.ClientId); var items = await _db.SaleItems.AsNoTracking().Where(i => i.SaleId == id).ToListAsync();
             return Ok(new { header.Id, header.Date, header.Payment, header.Status, header.Note, header.Total, ClientName = client?.FullName ?? "", Items = items.Select(i => new { i.Name, i.Qty, i.Price }) });
+=======
+            var header = await _db.SaleHeaders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.Id == id);
+
+            if (header == null)
+            {
+                _logger.LogWarning("Продаж не знайдено. Id: {Id}", id);
+                return NotFound();
+            }
+
+            var client = await _db.Clients.FindAsync(header.ClientId);
+            var items = await _db.SaleItems
+                .AsNoTracking()
+                .Where(i => i.SaleId == id)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                header.Id,
+                header.Date,
+                header.Payment,
+                header.Status,
+                header.Note,
+                header.Total,
+                ClientName = client?.FullName ?? "",
+                ClientId = header.ClientId,
+                Items = items.Select(i => new { i.Name, i.Qty, i.Price })
+            });
+>>>>>>> f98bf5a (chore: cleanup gitignore, remove build artifacts)
         }
 
+        // Всі ролі можуть переглядати останні продажі
         [HttpGet("recent")]
         public async Task<IActionResult> Recent([FromQuery] int take = 8)
         {
@@ -54,9 +88,11 @@ namespace Contact.API.Controllers
         }
         public bool UpsertService{get;set;}=false;
 
+        // Всі ролі можуть створювати продажі
         [HttpPost]
         public async Task<IActionResult> CreateSale([FromBody] SaleCreateDto dto)
         {
+<<<<<<< HEAD
             if (dto == null) return BadRequest("Empty"); if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name)) return BadRequest("Item required");
             if (dto.Item.Qty <= 0) dto.Item.Qty = 1; if (dto.Item.Price < 0) dto.Item.Price = 0;
             var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone); if (!cr.Success) return BadRequest(cr.ErrorMessage);
@@ -73,12 +109,105 @@ namespace Contact.API.Controllers
             if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name)) return BadRequest("Item required");
             var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone); if (!cr.Success) return BadRequest(cr.ErrorMessage);
             header.ClientId = cr.ClientId; header.Date = DateTimeHelper.NormalizeOrNow(dto.Date); header.Payment = dto.Payment ?? header.Payment; header.Status = dto.Status ?? header.Status; header.Note = dto.Note ?? header.Note; header.Total = dto.Item.Price * dto.Item.Qty;
+=======
+            if (dto == null) return BadRequest("Empty payload");
+            if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name)) return BadRequest("Item is required");
+            if (dto.Item.Qty <= 0) dto.Item.Qty = 1;
+            if (dto.Item.Price < 0) dto.Item.Price = 0;
+
+            var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
+            if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
+
+            if (dto.UpsertService)
+                await EnsureServiceExistsAsync(dto.Item.Name, dto.Item.Price);
+
+            var header = await CreateSaleHeaderAsync(dto, clientResult.ClientId);
+            await CreateSaleItemAsync(header.Id, dto.Item);
+
+            _logger.LogInformation("Створено продаж. Id: {Id}, Клієнт: {ClientId}", header.Id, clientResult.ClientId);
+            return Ok(new { id = header.Id });
+        }
+
+        private async Task EnsureServiceExistsAsync(string serviceName, decimal price)
+        {
+            var svcName = serviceName.Trim();
+            if (string.IsNullOrWhiteSpace(svcName)) return;
+
+            var exists = await _db.Services.AsNoTracking()
+                .AnyAsync(s => s.Name.ToLower() == svcName.ToLower());
+
+            if (!exists)
+            {
+                _db.Services.Add(new Service { Name = svcName, Price = price });
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        private async Task<SaleHeader> CreateSaleHeaderAsync(SaleCreateDto dto, int clientId)
+        {
+            var header = new SaleHeader
+            {
+                ClientId = clientId,
+                ServiceId = null,
+                Price = 0,
+                Date = DateTimeHelper.NormalizeOrNow(dto.Date),
+                Payment = dto.Payment ?? "",
+                Status = dto.Status ?? "done",
+                Note = dto.Note,
+                Total = dto.Item.Price * dto.Item.Qty
+            };
+
+            _db.SaleHeaders.Add(header);
+            await _db.SaveChangesAsync();
+            return header;
+        }
+
+        private async Task CreateSaleItemAsync(int saleId, SaleCreateItemDto itemDto)
+        {
+            var item = new SaleItem
+            {
+                SaleId = saleId,
+                Name = itemDto.Name,
+                Qty = itemDto.Qty,
+                Price = itemDto.Price
+            };
+            _db.SaleItems.Add(item);
+            await _db.SaveChangesAsync();
+        }
+
+        // Всі ролі можуть редагувати продажі
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> UpdateSale(int id, [FromBody] SaleCreateDto dto)
+        {
+            var header = await _db.SaleHeaders.FirstOrDefaultAsync(h => h.Id == id);
+            if (header == null)
+            {
+                _logger.LogWarning("Продаж не знайдено для оновлення. Id: {Id}", id);
+                return NotFound();
+            }
+
+            if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name))
+                return BadRequest("Item is required");
+
+            var clientResult = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
+            if (!clientResult.Success) return BadRequest(clientResult.ErrorMessage);
+
+            header.ClientId = clientResult.ClientId;
+            header.Date = DateTimeHelper.NormalizeOrNow(dto.Date);
+            header.Payment = dto.Payment ?? header.Payment;
+            header.Status = dto.Status ?? header.Status;
+            header.Note = dto.Note ?? header.Note;
+            header.Total = dto.Item.Price * dto.Item.Qty;
+
+>>>>>>> f98bf5a (chore: cleanup gitignore, remove build artifacts)
             var existingItem = await _db.SaleItems.FirstOrDefaultAsync(i => i.SaleId == id);
             if (existingItem != null) { existingItem.Name = dto.Item.Name; existingItem.Qty = dto.Item.Qty; existingItem.Price = dto.Item.Price; }
             await _db.SaveChangesAsync(); return NoContent();
         }
 
+        // Тільки superadmin та admin можуть видаляти
         [HttpDelete("{id:int}")]
+        [Authorize(Roles = "superadmin,admin")]
         public async Task<IActionResult> DeleteSale(int id)
         {
             var header = await _db.SaleHeaders.FirstOrDefaultAsync(h => h.Id == id); if (header == null) return NotFound();

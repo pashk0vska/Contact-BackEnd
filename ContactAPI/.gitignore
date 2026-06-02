@@ -1,16 +1,14 @@
-@"
-# Build
-bin/
-obj/
-
-# Visual Studio
 .vs/
+*.vscode/
 *.user
 *.suo
-
-# Logs
-*.log
-
-# Temp
-files.txt
-"@ | Out-File -FilePath D:\rep\Contact-BackEnd\.gitignore -Encoding utf8
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+*.tmp
+*.temp
+Migrations/
+Thumbs.db
+Desktop.ini
+*.db
+*.vsidx

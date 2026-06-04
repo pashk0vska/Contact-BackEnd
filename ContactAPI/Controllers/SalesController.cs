@@ -100,10 +100,17 @@ namespace Contact.API.Controllers
             if (header == null) return NotFound();
             var client = await _db.Clients.FindAsync(header.ClientId);
             var items  = await _db.SaleItems.AsNoTracking().Where(i => i.SaleId == id).ToListAsync();
+
+            string? masterName = header.MasterId == null ? null
+                : await _db.Users.AsNoTracking().Where(u => u.Id == header.MasterId)
+                    .Select(u => u.Username).FirstOrDefaultAsync();
+
             return Ok(new
             {
                 header.Id, header.Date, header.Payment, header.Status, header.Note, header.Total,
                 ClientName = client?.FullName ?? "",
+                masterId   = header.MasterId,
+                masterName,
                 Items      = items.Select(i => new { i.Name, i.Qty, i.Price })
             });
         }
@@ -140,6 +147,7 @@ namespace Contact.API.Controllers
             public SaleCreateItemDto Item { get; set; } = new();
             public string? ClientPhone { get; set; }
             public bool UpsertService  { get; set; } = false;
+            public int?    MasterId    { get; set; }
         }
 
         // POST — всі ролі
@@ -163,7 +171,8 @@ namespace Contact.API.Controllers
                 Payment   = dto.Payment ?? "",
                 Status    = dto.Status ?? "done",
                 Note      = dto.Note,
-                Total     = dto.Item.Price * dto.Item.Qty
+                Total     = dto.Item.Price * dto.Item.Qty,
+                MasterId  = dto.MasterId
             };
             _db.SaleHeaders.Add(header);
             await _db.SaveChangesAsync();
@@ -196,6 +205,8 @@ namespace Contact.API.Controllers
             header.Status   = dto.Status ?? header.Status;
             header.Note     = dto.Note ?? header.Note;
             header.Total    = dto.Item.Price * dto.Item.Qty;
+            // майстра оновлюємо лише якщо переданий (щоб старі форми без поля не скидали його)
+            if (dto.MasterId.HasValue) header.MasterId = dto.MasterId;
 
             var existingItem = await _db.SaleItems.FirstOrDefaultAsync(i => i.SaleId == id);
             if (existingItem != null)

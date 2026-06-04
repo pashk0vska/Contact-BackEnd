@@ -91,6 +91,10 @@ using (var scope = app.Services.CreateScope())
     // Міграція: додати колонку RecoveryKeys якщо не існує
     try { db.Database.ExecuteSqlRaw("ALTER TABLE users ADD COLUMN IF NOT EXISTS RecoveryKeys longtext NULL"); } catch { }
 
+    // Міграція (T1): додати колонку MasterId у ремонти та продажі, якщо не існує
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE repairs ADD COLUMN IF NOT EXISTS MasterId int NULL"); } catch { }
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE sale_headers ADD COLUMN IF NOT EXISTS MasterId int NULL"); } catch { }
+
     // Міграція: оновити роль "user" → "master" для існуючих користувачів
     try { db.Database.ExecuteSqlRaw("UPDATE users SET Role = 'master' WHERE Role = 'user'"); } catch { }
 

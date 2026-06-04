@@ -91,6 +91,65 @@ namespace Contact.API.Controllers
             return Ok(new { user.Id, user.Username, user.Email, user.Role });
         }
 
+        // PUT /api/users/{id} — редагування користувача (логін, email, пароль, роль)
+        // superadmin → може редагувати admin та master (роль міняє лише superadmin)
+        // admin      → може редагувати тільки master, без зміни ролі
+        // superadmin-ціль недоторкана через API
+        [HttpPut("{id:int}")]
+        [Authorize(Roles = "superadmin,admin")]
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserRequest req)
+        {
+            if (req == null) return BadRequest("Body is required.");
+
+            var target = await _context.Users.FindAsync(id);
+            if (target == null) return NotFound("Користувача не знайдено.");
+
+            if (target.Role == "superadmin")
+                return StatusCode(403, "Superadmin не може бути відредагований через API.");
+
+            var callerRole = GetCallerRole();
+            if (callerRole == "admin" && target.Role != "master")
+                return StatusCode(403, "Admin може редагувати тільки користувачів з роллю 'master'.");
+
+            // Зміна логіну — з перевіркою унікальності
+            if (!string.IsNullOrWhiteSpace(req.Username) && req.Username.Trim() != target.Username)
+            {
+                var newName = req.Username.Trim();
+                if (_context.Users.Any(u => u.Username == newName && u.Id != id))
+                    return Conflict(new { message = "Користувач із таким логіном уже існує." });
+                target.Username = newName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.Email))
+                target.Email = req.Email.Trim();
+
+            // Пароль міняємо лише якщо переданий (перехешовуємо)
+            if (!string.IsNullOrWhiteSpace(req.Password))
+            {
+                if (req.Password.Length < 6)
+                    return BadRequest("Пароль має бути від 6 символів.");
+                target.PasswordHash = PasswordHasher.Hash(req.Password);
+            }
+
+            // Роль — тільки superadmin і лише admin/master
+            if (!string.IsNullOrWhiteSpace(req.Role))
+            {
+                if (callerRole != "superadmin")
+                    return StatusCode(403, "Змінювати роль може тільки superadmin.");
+                var newRole = req.Role.ToLower().Trim();
+                if (newRole != "admin" && newRole != "master")
+                    return BadRequest("Допустимі ролі: 'admin', 'master'.");
+                target.Role = newRole;
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("User {Caller} updated user {Username} (role: {Role})",
+                User.FindFirstValue(ClaimTypes.Name), target.Username, target.Role);
+
+            return Ok(new { target.Id, target.Username, target.Email, target.Role });
+        }
+
         // DELETE /api/users/{id}
         // superadmin може видаляти admin та master (але не самого себе та не інших superadmin)
         // admin може видаляти тільки master
@@ -227,5 +286,13 @@ namespace Contact.API.Controllers
         public string Email    { get; set; } = "";
         public string Password { get; set; } = "";
         public string? Role    { get; set; }
+    }
+
+    public class UpdateUserRequest
+    {
+        public string? Username { get; set; }
+        public string? Email    { get; set; }
+        public string? Password { get; set; }
+        public string? Role     { get; set; }
     }
 }

@@ -35,6 +35,8 @@ namespace Contact.API.Controllers
             public string Status { get; set; } = "";
             public decimal Price { get; set; }
             public string? ClientPhone { get; set; }
+            public int? MasterId { get; set; }
+            public string? MasterName { get; set; }
         }
 
         // GET /api/repairs — всі ролі
@@ -51,7 +53,8 @@ namespace Contact.API.Controllers
                          Device = (r.DeviceType ?? "") + (string.IsNullOrWhiteSpace(r.Model) ? "" : " " + r.Model),
                          r.Problem, r.Status,
                          Price      = r.TotalCost,
-                         ClientName = c != null ? c.FullName : ""
+                         ClientName = c != null ? c.FullName : "",
+                         r.MasterId
                      };
 
             if (!string.IsNullOrWhiteSpace(rq.q))
@@ -88,25 +91,47 @@ namespace Contact.API.Controllers
                     Device     = x.Device ?? "",
                     Problem    = x.Problem ?? "",
                     Status     = x.Status ?? "",
-                    Price      = x.Price
+                    Price      = x.Price,
+                    MasterId   = x.MasterId,
+                    MasterName = _db.Users.Where(u => u.Id == x.MasterId).Select(u => u.Username).FirstOrDefault()
                 }).ToListAsync();
 
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
-        // GET /api/repairs/{id} — всі ролі
+        // GET /api/repairs/{id} — всі ролі (повні деталі + контакти клієнта + майстер) — T2
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetRepairById(int id)
         {
             var repair = await _db.Repairs.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
             if (repair == null) return NotFound();
-            var client = await _db.Clients.FindAsync(repair.ClientId);
+
+            var client = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == repair.ClientId);
+
+            string? masterName = repair.MasterId == null ? null
+                : await _db.Users.AsNoTracking().Where(u => u.Id == repair.MasterId)
+                    .Select(u => u.Username).FirstOrDefaultAsync();
+
             return Ok(new
             {
-                repair.Id, repair.DeviceType, repair.Model, repair.Problem,
-                repair.Status, repair.TotalCost, repair.PartsUsed,
-                Date       = repair.CreatedAt,
-                ClientName = client?.FullName ?? ""
+                repair.Id,
+                repair.Status,
+                repair.DeviceType,
+                repair.Model,
+                repair.Problem,
+                repair.PartsUsed,
+                repair.TotalCost,
+                createdAt  = repair.CreatedAt,
+                Date       = repair.CreatedAt,           // сумісність зі старою модалкою редагування
+                ClientName = client?.FullName ?? "",     // сумісність зі старою модалкою редагування
+                masterId   = repair.MasterId,
+                masterName,
+                client = client == null ? null : new
+                {
+                    client.FullName,
+                    client.Phone,
+                    client.Email
+                }
             });
         }
 
@@ -120,6 +145,7 @@ namespace Contact.API.Controllers
             public string   Status      { get; set; } = "new";
             public decimal  Price       { get; set; }
             public string?  ClientPhone { get; set; }
+            public int?     MasterId    { get; set; }
         }
 
         // POST /api/repairs — всі ролі (superadmin, admin, master)
@@ -142,7 +168,8 @@ namespace Contact.API.Controllers
                 Problem    = dto.Problem,
                 Status     = dto.Status ?? "new",
                 PartsUsed  = "",
-                TotalCost  = dto.Price
+                TotalCost  = dto.Price,
+                MasterId   = dto.MasterId
             };
 
             _db.Repairs.Add(r);
@@ -163,6 +190,8 @@ namespace Contact.API.Controllers
             r.Problem    = dto.Problem;
             r.Status     = dto.Status ?? r.Status;
             r.TotalCost  = dto.Price;
+            // майстра оновлюємо лише якщо переданий (щоб старі форми без поля не скидали його)
+            if (dto.MasterId.HasValue) r.MasterId = dto.MasterId;
             if (dto.Date != default) r.CreatedAt = DateTimeHelper.NormalizeOrNow(dto.Date);
 
             await _db.SaveChangesAsync();
@@ -197,7 +226,8 @@ namespace Contact.API.Controllers
                 Payment   = "Готівка",
                 Status    = "done",
                 Note      = $"Оплата за ремонт #{repair.Id}",
-                Total     = repair.TotalCost
+                Total     = repair.TotalCost,
+                MasterId  = repair.MasterId
             };
             _db.SaleHeaders.Add(header);
             await _db.SaveChangesAsync();

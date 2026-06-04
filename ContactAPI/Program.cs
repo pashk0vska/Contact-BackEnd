@@ -88,17 +88,17 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
 
-    // Міграція: додати колонку RecoveryKeys якщо не існує
-    try { db.Database.ExecuteSqlRaw("ALTER TABLE users ADD COLUMN IF NOT EXISTS RecoveryKeys longtext NULL"); } catch { }
+    // Безпечне додавання колонок (працює і на MySQL 8, і на MariaDB).
+    // ПРИМІТКА: 'ALTER TABLE ... ADD COLUMN IF NOT EXISTS' — синтаксис MariaDB,
+    // у MySQL 8 він падає. Тому перевіряємо наявність колонки через information_schema.
+    EnsureColumn(db, "users",        "RecoveryKeys", "longtext NULL");
+    EnsureColumn(db, "repairs",      "MasterId",     "int NULL");        // T1
+    EnsureColumn(db, "sale_headers", "MasterId",     "int NULL");        // T1
 
-    // Міграція (T1): додати колонку MasterId у ремонти та продажі, якщо не існує
-    try { db.Database.ExecuteSqlRaw("ALTER TABLE repairs ADD COLUMN IF NOT EXISTS MasterId int NULL"); } catch { }
-    try { db.Database.ExecuteSqlRaw("ALTER TABLE sale_headers ADD COLUMN IF NOT EXISTS MasterId int NULL"); } catch { }
-
-    // Міграція: оновити роль "user" → "master" для існуючих користувачів
+    // Міграція: оновити роль "user" -> "master" для існуючих користувачів
     try { db.Database.ExecuteSqlRaw("UPDATE users SET Role = 'master' WHERE Role = 'user'"); } catch { }
 
-    // Міграція: оновити перший admin → superadmin (або створити нового)
+    // Seed superadmin (БЕЗ авто-промоушену admin -> superadmin)
     SeedSuperAdmin(db);
 }
 
@@ -108,24 +108,51 @@ app.UseAuthorization();
 app.MapControllers();
 app.Run();
 
+// --- Idempotent column add, сумісне з MySQL 8 та MariaDB ---
+static void EnsureColumn(AppDbContext db, string table, string column, string ddl)
+{
+    try
+    {
+        var conn = db.Database.GetDbConnection();
+        bool opened = false;
+        if (conn.State != System.Data.ConnectionState.Open) { conn.Open(); opened = true; }
+        try
+        {
+            int exists;
+            using (var check = conn.CreateCommand())
+            {
+                check.CommandText =
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS " +
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @t AND COLUMN_NAME = @c";
+                var pt = check.CreateParameter(); pt.ParameterName = "@t"; pt.Value = table;  check.Parameters.Add(pt);
+                var pc = check.CreateParameter(); pc.ParameterName = "@c"; pc.Value = column; check.Parameters.Add(pc);
+                exists = Convert.ToInt32(check.ExecuteScalar());
+            }
+            if (exists == 0)
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}";
+                alter.ExecuteNonQuery();
+                Console.WriteLine($"[Migrate] Added column {table}.{column}");
+            }
+        }
+        finally { if (opened) conn.Close(); }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Migrate] {table}.{column} failed: {ex.Message}");
+    }
+}
+
 // --- Seed superadmin ---
 static void SeedSuperAdmin(AppDbContext db)
 {
-    // Перевіряємо, чи є вже superadmin
+    // Якщо superadmin уже є — нічого не робимо.
     var existing = db.Users.FirstOrDefault(u => u.Role == "superadmin");
     if (existing != null) return;
 
-    // Якщо є admin — промоутимо першого до superadmin
-    var firstAdmin = db.Users.FirstOrDefault(u => u.Role == "admin");
-    if (firstAdmin != null)
-    {
-        firstAdmin.Role = "superadmin";
-        db.SaveChanges();
-        Console.WriteLine($"[Seed] Promoted '{firstAdmin.Username}' to superadmin.");
-        return;
-    }
-
-    // Якщо немає жодного — створюємо superadmin за замовчуванням
+    // ВАЖЛИВО: НЕ промоутимо існуючого admin до superadmin —
+    // інакше ролі superadmin та admin "злипаються" в один акаунт.
     var superadmin = new User
     {
         Username     = "superadmin",

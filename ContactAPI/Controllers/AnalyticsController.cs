@@ -42,13 +42,16 @@ namespace Contact.API.Controllers
             var income   = salesRev + repRev;
             var avgCheck = salesCount > 0 ? decimal.Round(salesRev / salesCount, 2) : 0m;
 
+            // ===== Топ товарів + дохід за категоріями + топ послуг (Блок B) =====
             List<object> topItems = new();
+            List<object> topServices = new();
+            decimal catProducts = 0m, catServices = 0m, catBuilds = 0m;
             if (incS)
             {
                 var rows = await (from si in _db.SaleItems.AsNoTracking()
                                   join h in _db.SaleHeaders.AsNoTracking() on si.SaleId equals h.Id
                                   where h.Date >= startUtc && h.Date < endUtc
-                                  select new { si.Name, si.Qty, si.Price }).ToListAsync();
+                                  select new { si.Name, si.Type, si.Qty, si.Price }).ToListAsync();
 
                 topItems = rows.GroupBy(x => x.Name)
                     .Select(g => new { product = g.Key, category = "Продажі", qty = g.Sum(x => x.Qty), sum = g.Sum(x => (decimal)x.Price * x.Qty) })
@@ -56,13 +59,42 @@ namespace Contact.API.Controllers
                     .Take(10)
                     .Cast<object>()
                     .ToList();
+
+                foreach (var r in rows)
+                {
+                    var amt = (decimal)r.Price * r.Qty;
+                    switch ((r.Type ?? "product").ToLower())
+                    {
+                        case "service": catServices += amt; break;
+                        case "build":   catBuilds   += amt; break;
+                        default:        catProducts += amt; break;
+                    }
+                }
+
+                topServices = rows.Where(x => (x.Type ?? "").ToLower() == "service")
+                    .GroupBy(x => x.Name)
+                    .Select(g => new { name = g.Key, count = g.Sum(x => x.Qty) })
+                    .OrderByDescending(x => x.count)
+                    .Take(8)
+                    .Cast<object>()
+                    .ToList();
             }
+
+            var byCategory = new[]
+            {
+                new { name = "Ремонти", value = incR ? repRev : 0m },
+                new { name = "Товари",  value = catProducts },
+                new { name = "Збірки",  value = catBuilds },
+                new { name = "Послуги", value = catServices }
+            };
 
             return Ok(new
             {
                 period = new { from = startLocal.ToString("yyyy-MM-dd"), to = endLE.AddDays(-1).ToString("yyyy-MM-dd"), type = mode },
                 kpi    = new { income, salesCount, repairsCount = repCount, avgCheck, profitEstimate = income, newClients = newCl },
-                topProducts = topItems
+                topProducts = topItems,
+                byCategory,
+                topServices
             });
         }
 

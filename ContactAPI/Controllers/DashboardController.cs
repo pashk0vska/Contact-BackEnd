@@ -74,6 +74,40 @@ namespace Contact.API.Controllers
                                    price = h.Total
                                }).Take(8).ToListAsync();
 
+            // ===== profitSeries — дохід (продажі + ремонти) по днях за останні 14 днів (T4) =====
+            var tz = TimeZoneInfo.Local;
+            var nlNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            var seriesStartLocal = nlNow.Date.AddDays(-13);
+            var seriesStartUtc = TimeZoneInfo.ConvertTimeToUtc(seriesStartLocal, tz);
+            var seriesEndUtc = TimeZoneInfo.ConvertTimeToUtc(nlNow.Date.AddDays(1), tz);
+
+            var salesRows = await _db.SaleHeaders.AsNoTracking()
+                .Where(h => h.Date >= seriesStartUtc && h.Date < seriesEndUtc)
+                .Select(h => new { h.Date, h.Total }).ToListAsync();
+            var repRows = await _db.Repairs.AsNoTracking()
+                .Where(r => r.CreatedAt >= seriesStartUtc && r.CreatedAt < seriesEndUtc)
+                .Select(r => new { r.CreatedAt, r.TotalCost }).ToListAsync();
+
+            var buckets = new Dictionary<DateTime, decimal>();
+            for (int i = 0; i < 14; i++) buckets[seriesStartLocal.AddDays(i)] = 0m;
+            foreach (var s in salesRows)
+            {
+                var d = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(s.Date, DateTimeKind.Utc), tz).Date;
+                if (buckets.ContainsKey(d)) buckets[d] += s.Total;
+            }
+            foreach (var r in repRows)
+            {
+                var d = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(r.CreatedAt, DateTimeKind.Utc), tz).Date;
+                if (buckets.ContainsKey(d)) buckets[d] += r.TotalCost;
+            }
+            var profitSeries = buckets.OrderBy(kv => kv.Key)
+                .Select(kv => new { label = kv.Key.ToString("dd.MM"), value = kv.Value })
+                .ToList();
+
+            // активні ремонти (не закриті/не скасовані) — для KPI/донату
+            var activeRepairs = await _db.Repairs.AsNoTracking()
+                .CountAsync(r => r.Status != "done" && r.Status != "issued" && r.Status != "canceled");
+
             return Ok(new
             {
                 salesToday  = stc, profitSales = sts,
@@ -84,10 +118,12 @@ namespace Contact.API.Controllers
                 repairsMonth = rmc, repairsMonthSum = rms,
                 totalIncomeMonth = sms + rms,
                 clientsTotal = ct,
+                activeRepairs,
                 repairsByStatus = await _db.Repairs.AsNoTracking()
                     .GroupBy(r => r.Status)
                     .Select(g => new { status = g.Key, count = g.Count() })
                     .ToListAsync(),
+                profitSeries,
                 recent = recent.Select(x => new { x.name, item = x.item ?? "", x.price }).ToList()
             });
         }

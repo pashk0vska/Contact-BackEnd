@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -44,6 +46,31 @@ namespace Contact.API.Controllers
             });
         }
 
+        // POST /api/Auth/change-password — зміна ВЛАСНОГО пароля (будь-яка роль над своїм акаунтом) — Блок A
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
+        {
+            if (req == null || string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
+                return BadRequest("Заповніть поточний і новий пароль.");
+            if (req.NewPassword.Length < 6)
+                return BadRequest("Новий пароль має бути від 6 символів.");
+
+            var idStr = User.FindFirstValue("userId");
+            if (!int.TryParse(idStr, out var uid)) return Unauthorized();
+
+            var user = await _context.Users.FindAsync(uid);
+            if (user == null) return NotFound("Користувача не знайдено.");
+
+            if (!PasswordHasher.Verify(req.CurrentPassword, user.PasswordHash))
+                return BadRequest("Поточний пароль невірний.");
+
+            user.PasswordHash = PasswordHasher.Hash(req.NewPassword);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Password changed for {Username}", user.Username);
+            return Ok(new { message = "Пароль оновлено" });
+        }
+
         private string GenerateJwtToken(User user)
         {
             var jwt = _configuration.GetSection("Jwt");
@@ -67,4 +94,6 @@ namespace Contact.API.Controllers
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
+
+    public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 }

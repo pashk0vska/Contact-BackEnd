@@ -94,6 +94,7 @@ using (var scope = app.Services.CreateScope())
     EnsureColumn(db, "users",        "RecoveryKeys", "longtext NULL");
     EnsureColumn(db, "repairs",      "MasterId",     "int NULL");        // T1
     EnsureColumn(db, "sale_headers", "MasterId",     "int NULL");        // T1
+    EnsureColumn(db, "sale_items",   "Type",         "varchar(20) NULL");   // T6
 
     // Міграція: оновити роль "user" -> "master" для існуючих користувачів
     try { db.Database.ExecuteSqlRaw("UPDATE users SET Role = 'master' WHERE Role = 'user'"); } catch { }

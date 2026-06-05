@@ -111,7 +111,7 @@ namespace Contact.API.Controllers
                 ClientName = client?.FullName ?? "",
                 masterId   = header.MasterId,
                 masterName,
-                Items      = items.Select(i => new { i.Name, i.Qty, i.Price })
+                Items      = items.Select(i => new { i.Name, i.Qty, i.Price, type = i.Type ?? "product" })
             });
         }
 
@@ -134,6 +134,7 @@ namespace Contact.API.Controllers
             public string Name { get; set; } = "";
             public int Qty { get; set; }
             public decimal Price { get; set; }
+            public string? Type { get; set; }   // T6: "product" | "service"
         }
 
         public class SaleCreateDto
@@ -144,10 +145,33 @@ namespace Contact.API.Controllers
             public string  Payment     { get; set; } = "";
             public string  Status      { get; set; } = "done";
             public string? Note        { get; set; }
-            public SaleCreateItemDto Item { get; set; } = new();
+            public SaleCreateItemDto Item { get; set; } = new();          // сумісність зі старим одиничним форматом
+            public List<SaleCreateItemDto>? Items { get; set; }           // T6: кілька позицій
             public string? ClientPhone { get; set; }
             public bool UpsertService  { get; set; } = false;
             public int?    MasterId    { get; set; }
+        }
+
+        // Нормалізація позицій: бере Items[] якщо є, інакше падає на одиничний Item; чистить значення.
+        private static List<SaleCreateItemDto> NormalizeItems(SaleCreateDto dto)
+        {
+            var src = (dto.Items != null && dto.Items.Count > 0)
+                ? dto.Items
+                : new List<SaleCreateItemDto> { dto.Item };
+
+            var clean = new List<SaleCreateItemDto>();
+            foreach (var it in src)
+            {
+                if (it == null || string.IsNullOrWhiteSpace(it.Name)) continue;
+                clean.Add(new SaleCreateItemDto
+                {
+                    Name  = it.Name.Trim(),
+                    Qty   = it.Qty <= 0 ? 1 : it.Qty,
+                    Price = it.Price < 0 ? 0 : it.Price,
+                    Type  = string.IsNullOrWhiteSpace(it.Type) ? "product" : it.Type.Trim().ToLower()
+                });
+            }
+            return clean;
         }
 
         // POST — всі ролі
@@ -155,9 +179,8 @@ namespace Contact.API.Controllers
         public async Task<IActionResult> CreateSale([FromBody] SaleCreateDto dto)
         {
             if (dto == null) return BadRequest("Empty");
-            if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name)) return BadRequest("Item required");
-            if (dto.Item.Qty <= 0) dto.Item.Qty = 1;
-            if (dto.Item.Price < 0) dto.Item.Price = 0;
+            var items = NormalizeItems(dto);
+            if (items.Count == 0) return BadRequest("Item required");
 
             var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
             if (!cr.Success) return BadRequest(cr.ErrorMessage);
@@ -171,19 +194,23 @@ namespace Contact.API.Controllers
                 Payment   = dto.Payment ?? "",
                 Status    = dto.Status ?? "done",
                 Note      = dto.Note,
-                Total     = dto.Item.Price * dto.Item.Qty,
+                Total     = items.Sum(x => x.Price * x.Qty),
                 MasterId  = dto.MasterId
             };
             _db.SaleHeaders.Add(header);
             await _db.SaveChangesAsync();
 
-            _db.SaleItems.Add(new SaleItem
+            foreach (var it in items)
             {
-                SaleId = header.Id,
-                Name   = dto.Item.Name,
-                Qty    = dto.Item.Qty,
-                Price  = dto.Item.Price
-            });
+                _db.SaleItems.Add(new SaleItem
+                {
+                    SaleId = header.Id,
+                    Name   = it.Name,
+                    Qty    = it.Qty,
+                    Price  = it.Price,
+                    Type   = it.Type
+                });
+            }
             await _db.SaveChangesAsync();
             return Ok(new { id = header.Id });
         }
@@ -194,7 +221,9 @@ namespace Contact.API.Controllers
         {
             var header = await _db.SaleHeaders.FirstOrDefaultAsync(h => h.Id == id);
             if (header == null) return NotFound();
-            if (dto.Item == null || string.IsNullOrWhiteSpace(dto.Item.Name)) return BadRequest("Item required");
+
+            var items = NormalizeItems(dto);
+            if (items.Count == 0) return BadRequest("Item required");
 
             var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
             if (!cr.Success) return BadRequest(cr.ErrorMessage);
@@ -204,16 +233,23 @@ namespace Contact.API.Controllers
             header.Payment  = dto.Payment ?? header.Payment;
             header.Status   = dto.Status ?? header.Status;
             header.Note     = dto.Note ?? header.Note;
-            header.Total    = dto.Item.Price * dto.Item.Qty;
+            header.Total    = items.Sum(x => x.Price * x.Qty);
             // майстра оновлюємо лише якщо переданий (щоб старі форми без поля не скидали його)
             if (dto.MasterId.HasValue) header.MasterId = dto.MasterId;
 
-            var existingItem = await _db.SaleItems.FirstOrDefaultAsync(i => i.SaleId == id);
-            if (existingItem != null)
+            // T6: повністю переписуємо позиції (додавання/видалення/зміна)
+            _db.SaleItems.RemoveRange(_db.SaleItems.Where(i => i.SaleId == id));
+            await _db.SaveChangesAsync();
+            foreach (var it in items)
             {
-                existingItem.Name  = dto.Item.Name;
-                existingItem.Qty   = dto.Item.Qty;
-                existingItem.Price = dto.Item.Price;
+                _db.SaleItems.Add(new SaleItem
+                {
+                    SaleId = id,
+                    Name   = it.Name,
+                    Qty    = it.Qty,
+                    Price  = it.Price,
+                    Type   = it.Type
+                });
             }
             await _db.SaveChangesAsync();
             return NoContent();

@@ -108,6 +108,21 @@ namespace Contact.API.Controllers
             var activeRepairs = await _db.Repairs.AsNoTracking()
                 .CountAsync(r => r.Status != "done" && r.Status != "issued" && r.Status != "canceled");
 
+            // ===== Останні ремонти (Блок C) =====
+            var recentRepairs = await (from r in _db.Repairs.AsNoTracking()
+                                       join c0 in _db.Clients.AsNoTracking() on r.ClientId equals c0.Id into gc
+                                       from c in gc.DefaultIfEmpty()
+                                       orderby r.CreatedAt descending
+                                       select new
+                                       {
+                                           id         = r.Id,
+                                           clientName = c != null ? c.FullName : "",
+                                           device     = (r.DeviceType ?? "") + (string.IsNullOrWhiteSpace(r.Model) ? "" : " " + r.Model),
+                                           status     = r.Status,
+                                           totalCost  = r.TotalCost,
+                                           masterName = _db.Users.Where(u => u.Id == r.MasterId).Select(u => u.Username).FirstOrDefault()
+                                       }).Take(6).ToListAsync();
+
             return Ok(new
             {
                 salesToday  = stc, profitSales = sts,
@@ -124,6 +139,7 @@ namespace Contact.API.Controllers
                     .Select(g => new { status = g.Key, count = g.Count() })
                     .ToListAsync(),
                 profitSeries,
+                recentRepairs,
                 recent = recent.Select(x => new { x.name, item = x.item ?? "", x.price }).ToList()
             });
         }

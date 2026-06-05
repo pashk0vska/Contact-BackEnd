@@ -255,6 +255,35 @@ namespace Contact.API.Controllers
             return NoContent();
         }
 
+        // POST /api/Sales/{id}/duplicate — дублювати продаж із тими ж позиціями (Блок D)
+        [HttpPost("{id:int}/duplicate")]
+        public async Task<IActionResult> DuplicateSale(int id)
+        {
+            var src = await _db.SaleHeaders.AsNoTracking().FirstOrDefaultAsync(h => h.Id == id);
+            if (src == null) return NotFound();
+            var items = await _db.SaleItems.AsNoTracking().Where(i => i.SaleId == id).ToListAsync();
+
+            var header = new SaleHeader
+            {
+                ClientId  = src.ClientId,
+                ServiceId = src.ServiceId,
+                Price     = src.Price,
+                Date      = DateTime.UtcNow,
+                Payment   = src.Payment,
+                Status    = src.Status,
+                Note      = src.Note,
+                Total     = src.Total,
+                MasterId  = src.MasterId
+            };
+            _db.SaleHeaders.Add(header);
+            await _db.SaveChangesAsync();
+
+            foreach (var it in items)
+                _db.SaleItems.Add(new SaleItem { SaleId = header.Id, Name = it.Name, Qty = it.Qty, Price = it.Price, Type = it.Type });
+            await _db.SaveChangesAsync();
+            return Ok(new { id = header.Id });
+        }
+
         // DELETE — тільки superadmin та admin (master НЕ може видаляти)
         [HttpDelete("{id:int}")]
         [Authorize(Roles = "superadmin,admin")]

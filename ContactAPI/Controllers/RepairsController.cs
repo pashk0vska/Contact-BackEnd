@@ -145,6 +145,7 @@ namespace Contact.API.Controllers
             public string   Status      { get; set; } = "new";
             public decimal  Price       { get; set; }
             public string?  ClientPhone { get; set; }
+            public string?  ClientEmail { get; set; }
             public int?     MasterId    { get; set; }
         }
 
@@ -156,7 +157,7 @@ namespace Contact.API.Controllers
             if (string.IsNullOrWhiteSpace(dto.Device))    return BadRequest("Device is required");
             if (string.IsNullOrWhiteSpace(dto.Problem))   return BadRequest("Problem is required");
 
-            var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
+            var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone, dto.ClientEmail);
             if (!cr.Success) return BadRequest(cr.ErrorMessage);
 
             var r = new Repair

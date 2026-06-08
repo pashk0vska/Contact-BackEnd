@@ -56,30 +56,34 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page, pageSize });
         }
 
-        // POST — всі ролі
+        // POST — всі ролі (email тепер обов'язковий)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] Client model)
         {
             if (model == null) return BadRequest("Body is required.");
             if (string.IsNullOrWhiteSpace(model.FullName)) return BadRequest("FullName is required.");
             if (string.IsNullOrWhiteSpace(model.Phone)) return BadRequest("Phone is required.");
+            if (string.IsNullOrWhiteSpace(model.Email)) return BadRequest("Email is required.");
 
-            model.Email ??= "";
+            model.Email = model.Email.Trim();
             _db.Clients.Add(model);
             await _db.SaveChangesAsync();
             return Ok(new { id = model.Id });
         }
 
-        // PUT — всі ролі
+        // PUT — всі ролі (email тепер обов'язковий)
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] Client model)
         {
             var entity = await _db.Clients.FindAsync(id);
             if (entity == null) return NotFound();
+            if (string.IsNullOrWhiteSpace(model.FullName)) return BadRequest("FullName is required.");
+            if (string.IsNullOrWhiteSpace(model.Phone)) return BadRequest("Phone is required.");
+            if (string.IsNullOrWhiteSpace(model.Email)) return BadRequest("Email is required.");
 
-            entity.FullName = model.FullName?.Trim() ?? entity.FullName;
-            entity.Phone    = model.Phone?.Trim() ?? entity.Phone;
-            entity.Email    = model.Email?.Trim() ?? entity.Email;
+            entity.FullName = model.FullName.Trim();
+            entity.Phone    = model.Phone.Trim();
+            entity.Email    = model.Email.Trim();
 
             await _db.SaveChangesAsync();
             return NoContent();

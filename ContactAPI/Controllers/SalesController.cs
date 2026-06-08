@@ -148,6 +148,7 @@ namespace Contact.API.Controllers
             public SaleCreateItemDto Item { get; set; } = new();          // сумісність зі старим одиничним форматом
             public List<SaleCreateItemDto>? Items { get; set; }           // T6: кілька позицій
             public string? ClientPhone { get; set; }
+            public string? ClientEmail { get; set; }
             public bool UpsertService  { get; set; } = false;
             public int?    MasterId    { get; set; }
         }
@@ -182,7 +183,7 @@ namespace Contact.API.Controllers
             var items = NormalizeItems(dto);
             if (items.Count == 0) return BadRequest("Item required");
 
-            var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
+            var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone, dto.ClientEmail);
             if (!cr.Success) return BadRequest(cr.ErrorMessage);
 
             var header = new SaleHeader
@@ -225,7 +226,7 @@ namespace Contact.API.Controllers
             var items = NormalizeItems(dto);
             if (items.Count == 0) return BadRequest("Item required");
 
-            var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone);
+            var cr = await ClientResolver.ResolveOrCreateAsync(_db, dto.ClientId, dto.ClientName, dto.ClientPhone, dto.ClientEmail);
             if (!cr.Success) return BadRequest(cr.ErrorMessage);
 
             header.ClientId = cr.ClientId;

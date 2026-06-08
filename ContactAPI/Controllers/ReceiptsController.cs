@@ -21,6 +21,10 @@ namespace Contact.API.Controllers
             _context = context; _logger = logger;
         }
 
+        const string ShopName = "КОНТАКТ";
+        const string ShopSub  = "Сервісний центр · ФОП Марціновський А.В.";
+        const string ShopAddr = "м. Городенка · +380 67 000 00 00";
+
         [HttpGet("sale/{id}/pdf")]
         public async Task<IActionResult> GetSaleReceiptPdf(int id)
         {
@@ -33,35 +37,49 @@ namespace Contact.API.Controllers
             {
                 container.Page(page =>
                 {
-                    page.Size(PageSizes.A4); page.Margin(2, Unit.Centimetre); page.DefaultTextStyle(x => x.FontSize(12));
+                    page.Size(PageSizes.A5); page.Margin(1.4f, Unit.Centimetre); page.DefaultTextStyle(x => x.FontSize(11));
                     page.Header().Column(col =>
                     {
-                        col.Item().Text("Сервісний центр Kontakt").FontSize(20).Bold().AlignCenter();
-                        col.Item().Text($"Чек №{sale.Id}").FontSize(14).AlignCenter();
-                        col.Item().PaddingTop(10).LineHorizontal(1);
+                        col.Item().Text(ShopName).FontSize(26).Bold().AlignCenter();
+                        col.Item().Text(ShopSub).FontSize(10).FontColor(Colors.Grey.Medium).AlignCenter();
+                        col.Item().Text(ShopAddr).FontSize(10).FontColor(Colors.Grey.Medium).AlignCenter();
+                        col.Item().PaddingTop(8).LineHorizontal(1);
+                        col.Item().PaddingTop(6).Row(r =>
+                        {
+                            r.RelativeItem().Text($"Чек № S-{sale.Id:0000}").SemiBold();
+                            r.RelativeItem().AlignRight().Text($"{sale.Date.ToLocalTime():dd.MM.yyyy HH:mm}").FontColor(Colors.Grey.Medium);
+                        });
                     });
                     page.Content().PaddingVertical(10).Column(col =>
                     {
-                        col.Item().Text($"Дата: {sale.Date:dd.MM.yyyy}");
-                        col.Item().Text($"Клієнт: {client?.FullName ?? "Невідомо"}");
-                        col.Item().Text($"Оплата: {sale.Payment}");
-                        col.Item().Text($"Статус: {sale.Status}");
-                        col.Item().PaddingTop(10).Text("Товари:").Bold();
+                        col.Item().Text($"Клієнт: {client?.FullName ?? "—"}");
+                        col.Item().PaddingBottom(8).Text($"Оплата: {sale.Payment}");
                         col.Item().Table(table =>
                         {
-                            table.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(1); c.RelativeColumn(1); c.RelativeColumn(1); });
-                            table.Header(h => { h.Cell().Text("Назва").Bold(); h.Cell().Text("К-ть").Bold(); h.Cell().Text("Ціна").Bold(); h.Cell().Text("Сума").Bold(); });
+                            table.ColumnsDefinition(c => { c.RelativeColumn(4); c.RelativeColumn(1); c.RelativeColumn(2); c.RelativeColumn(2); });
+                            table.Header(h =>
+                            {
+                                h.Cell().BorderBottom(1).PaddingBottom(4).Text("Найменування").SemiBold();
+                                h.Cell().BorderBottom(1).PaddingBottom(4).AlignCenter().Text("К-ть").SemiBold();
+                                h.Cell().BorderBottom(1).PaddingBottom(4).AlignRight().Text("Ціна").SemiBold();
+                                h.Cell().BorderBottom(1).PaddingBottom(4).AlignRight().Text("Сума").SemiBold();
+                            });
                             foreach (var item in sale.Items)
                             {
-                                table.Cell().Text(item.Name);
-                                table.Cell().Text(item.Qty.ToString());
-                                table.Cell().Text($"{item.Price:0.00} грн");
-                                table.Cell().Text($"{item.Price * item.Qty:0.00} грн");
+                                table.Cell().PaddingVertical(3).Text(item.Name);
+                                table.Cell().PaddingVertical(3).AlignCenter().Text(item.Qty.ToString());
+                                table.Cell().PaddingVertical(3).AlignRight().Text($"{item.Price:0.00}");
+                                table.Cell().PaddingVertical(3).AlignRight().Text($"{item.Price * item.Qty:0.00}");
                             }
                         });
-                        col.Item().PaddingTop(10).Text($"Разом: {sale.Total:0.00} грн").Bold().FontSize(14);
+                        col.Item().PaddingTop(10).LineHorizontal(1);
+                        col.Item().PaddingTop(6).Row(r =>
+                        {
+                            r.RelativeItem().Text("До сплати").Bold().FontSize(14);
+                            r.RelativeItem().AlignRight().Text($"{sale.Total:0.00} ₴").Bold().FontSize(14);
+                        });
                     });
-                    page.Footer().AlignCenter().Text($"Дякуємо! {DateTime.Now:dd.MM.yyyy HH:mm}");
+                    page.Footer().AlignCenter().Text("Дякуємо за звернення!").FontColor(Colors.Grey.Medium);
                 });
             });
             return File(pdf.GeneratePdf(), "application/pdf", $"receipt-sale-{id}.pdf");
@@ -79,23 +97,34 @@ namespace Contact.API.Controllers
             {
                 container.Page(page =>
                 {
-                    page.Size(PageSizes.A4); page.Margin(2, Unit.Centimetre); page.DefaultTextStyle(x => x.FontSize(12));
+                    page.Size(PageSizes.A5); page.Margin(1.4f, Unit.Centimetre); page.DefaultTextStyle(x => x.FontSize(11));
                     page.Header().Column(col =>
                     {
-                        col.Item().Text("Сервісний центр Kontakt").FontSize(20).Bold().AlignCenter();
-                        col.Item().Text($"Акт №{repair.Id}").FontSize(14).AlignCenter();
-                        col.Item().PaddingTop(10).LineHorizontal(1);
+                        col.Item().Text(ShopName).FontSize(26).Bold().AlignCenter();
+                        col.Item().Text(ShopSub).FontSize(10).FontColor(Colors.Grey.Medium).AlignCenter();
+                        col.Item().Text(ShopAddr).FontSize(10).FontColor(Colors.Grey.Medium).AlignCenter();
+                        col.Item().PaddingTop(8).LineHorizontal(1);
+                        col.Item().PaddingTop(6).Row(r =>
+                        {
+                            r.RelativeItem().Text($"Акт № R-{repair.Id:0000}").SemiBold();
+                            r.RelativeItem().AlignRight().Text($"{repair.CreatedAt.ToLocalTime():dd.MM.yyyy HH:mm}").FontColor(Colors.Grey.Medium);
+                        });
                     });
                     page.Content().PaddingVertical(10).Column(col =>
                     {
-                        col.Item().Text($"Дата: {repair.CreatedAt:dd.MM.yyyy}");
-                        col.Item().Text($"Клієнт: {client?.FullName ?? "Невідомо"}");
-                        col.Item().Text($"Пристрій: {repair.DeviceType} {repair.Model}");
-                        col.Item().Text($"Проблема: {repair.Problem}");
-                        col.Item().Text($"Статус: {repair.Status}");
-                        col.Item().PaddingTop(10).Text($"Вартість: {repair.TotalCost:0.00} грн").Bold().FontSize(14);
+                        col.Item().Text($"Клієнт: {client?.FullName ?? "—"}");
+                        col.Item().Text($"Пристрій: {repair.DeviceType} {repair.Model}".Trim());
+                        col.Item().Text($"Несправність: {repair.Problem}");
+                        if (!string.IsNullOrWhiteSpace(repair.PartsUsed))
+                            col.Item().Text($"Запчастини / роботи: {repair.PartsUsed}");
+                        col.Item().PaddingTop(10).LineHorizontal(1);
+                        col.Item().PaddingTop(6).Row(r =>
+                        {
+                            r.RelativeItem().Text("Вартість").Bold().FontSize(14);
+                            r.RelativeItem().AlignRight().Text($"{repair.TotalCost:0.00} ₴").Bold().FontSize(14);
+                        });
                     });
-                    page.Footer().AlignCenter().Text($"Дякуємо! {DateTime.Now:dd.MM.yyyy HH:mm}");
+                    page.Footer().AlignCenter().Text("Дякуємо за звернення!").FontColor(Colors.Grey.Medium);
                 });
             });
             return File(pdf.GeneratePdf(), "application/pdf", $"receipt-repair-{id}.pdf");

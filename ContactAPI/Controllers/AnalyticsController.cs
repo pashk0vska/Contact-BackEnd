@@ -80,6 +80,26 @@ namespace Contact.API.Controllers
                     .ToList();
             }
 
+            // ===== Ремонти: розподіл за статусами + топ типів пристроїв (для режиму «Лише ремонти») =====
+            List<object> repairsByStatus = new();
+            List<object> repairsByDevice = new();
+            if (incR)
+            {
+                repairsByStatus = (await repQ
+                    .GroupBy(r => r.Status)
+                    .Select(g => new { status = g.Key, count = g.Count() })
+                    .ToListAsync())
+                    .Cast<object>().ToList();
+
+                repairsByDevice = (await repQ
+                    .GroupBy(r => r.DeviceType)
+                    .Select(g => new { device = g.Key, count = g.Count(), sum = g.Sum(x => x.TotalCost) })
+                    .OrderByDescending(x => x.sum)
+                    .Take(8)
+                    .ToListAsync())
+                    .Cast<object>().ToList();
+            }
+
             var byCategory = new[]
             {
                 new { name = "Ремонти", value = incR ? repRev : 0m },
@@ -94,7 +114,9 @@ namespace Contact.API.Controllers
                 kpi    = new { income, salesCount, repairsCount = repCount, avgCheck, profitEstimate = income, newClients = newCl },
                 topProducts = topItems,
                 byCategory,
-                topServices
+                topServices,
+                repairsByStatus,
+                repairsByDevice
             });
         }
 

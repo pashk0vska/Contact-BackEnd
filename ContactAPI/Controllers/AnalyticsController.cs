@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Contact.API.Data;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
+using Contact.API.Helpers;
 
 namespace Contact.API.Controllers
 {
@@ -123,52 +121,19 @@ namespace Contact.API.Controllers
         [HttpGet("report-pdf")]
         public async Task<IActionResult> ReportPdf([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? type)
         {
-            var tz = TimeZoneInfo.Local;
-            var nl = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            var startLocal = (from?.Date ?? nl.Date.AddDays(-29));
-            var endLE      = (to?.Date ?? nl.Date).AddDays(1);
-            var startUtc   = TimeZoneInfo.ConvertTimeToUtc(startLocal, tz);
-            var endUtc     = TimeZoneInfo.ConvertTimeToUtc(endLE, tz);
+            var data = await AnalyticsReport.BuildAsync(_db, from, to, type);
+            var bytes = AnalyticsPdf.Build(data);
+            var name = $"kontakt-zvit_{data.FromLocal:yyyy-MM-dd}_{data.ToLocal:yyyy-MM-dd}.pdf";
+            return File(bytes, "application/pdf", name);
+        }
 
-            var mode = (type ?? "all").Trim().ToLowerInvariant();
-            var incS = mode == "all" || mode == "sales";
-            var incR = mode == "all" || mode == "repairs";
-
-            var salesQ     = _db.SaleHeaders.AsNoTracking().Where(h => h.Date >= startUtc && h.Date < endUtc);
-            var salesCount = incS ? await salesQ.CountAsync() : 0;
-            var salesRev   = incS ? await salesQ.Select(h => (decimal?)h.Total).SumAsync() ?? 0m : 0m;
-
-            var repQ     = _db.Repairs.AsNoTracking().Where(r => r.CreatedAt >= startUtc && r.CreatedAt < endUtc);
-            var repCount = incR ? await repQ.CountAsync() : 0;
-            var repRev   = incR ? await repQ.Select(r => (decimal?)r.TotalCost).SumAsync() ?? 0m : 0m;
-
-            var income = salesRev + repRev;
-
-            QuestPDF.Settings.License = LicenseType.Community;
-            var pdf = Document.Create(container =>
-            {
-                container.Page(page =>
-                {
-                    page.Size(PageSizes.A4);
-                    page.Margin(2, Unit.Centimetre);
-                    page.DefaultTextStyle(x => x.FontSize(12));
-                    page.Header().Column(col =>
-                    {
-                        col.Item().Text("Kontakt — Зведений звіт").FontSize(20).Bold().AlignCenter();
-                        col.Item().Text($"Період: {startLocal:dd.MM.yyyy} — {endLE.AddDays(-1):dd.MM.yyyy}").FontSize(14).AlignCenter();
-                        col.Item().PaddingTop(10).LineHorizontal(1);
-                    });
-                    page.Content().PaddingVertical(10).Column(col =>
-                    {
-                        col.Item().Text("KPI").Bold().FontSize(16);
-                        col.Item().Text($"Загальний дохід: {income:N2} грн");
-                        col.Item().Text($"Продажів: {salesCount} (₴{salesRev:N2})");
-                        col.Item().Text($"Ремонтів: {repCount} (₴{repRev:N2})");
-                    });
-                    page.Footer().AlignCenter().Text($"Згенеровано: {DateTime.Now:dd.MM.yyyy HH:mm}");
-                });
-            });
-            return File(pdf.GeneratePdf(), "application/pdf", "report.pdf");
+        [HttpGet("report-excel")]
+        public async Task<IActionResult> ReportExcel([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? type)
+        {
+            var data = await AnalyticsReport.BuildAsync(_db, from, to, type);
+            var bytes = AnalyticsExcel.Build(data);
+            var name = $"kontakt-zvit_{data.FromLocal:yyyy-MM-dd}_{data.ToLocal:yyyy-MM-dd}.xlsx";
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name);
         }
     }
 }

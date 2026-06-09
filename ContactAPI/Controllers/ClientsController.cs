@@ -89,29 +89,72 @@ namespace Contact.API.Controllers
             return NoContent();
         }
 
+        // Каскадне видалення пов'язаних із клієнтом записів:
+        //  • позиції продажів (sale_items) проданих цьому клієнту;
+        //  • продажі (sale_headers) клієнта (FK на клієнта — Restrict, тому прибираємо вручну);
+        //  • ремонти клієнта (інакше лишались «осиротілі» ремонти з порожньою колонкою клієнта).
+        private async Task DeleteClientCascadeAsync(IEnumerable<int> clientIds)
+        {
+            var ids = clientIds.Distinct().ToList();
+            if (ids.Count == 0) return;
+
+            var saleIds = await _db.SaleHeaders.Where(h => ids.Contains(h.ClientId)).Select(h => h.Id).ToListAsync();
+            if (saleIds.Count > 0)
+            {
+                _db.SaleItems.RemoveRange(_db.SaleItems.Where(i => saleIds.Contains(i.SaleId)));
+                _db.SaleHeaders.RemoveRange(_db.SaleHeaders.Where(h => ids.Contains(h.ClientId)));
+            }
+            _db.Repairs.RemoveRange(_db.Repairs.Where(r => ids.Contains(r.ClientId)));
+            _db.Clients.RemoveRange(_db.Clients.Where(c => ids.Contains(c.Id)));
+            await _db.SaveChangesAsync();
+        }
+
         // DELETE — тільки superadmin та admin (master НЕ може видаляти)
+        // Видаляє клієнта РАЗОМ з його ремонтами та продажами (каскадно).
         [HttpDelete("{id:int}")]
         [Authorize(Roles = "superadmin,admin")]
         public async Task<IActionResult> Delete([FromRoute] int id)
         {
-            var entity = await _db.Clients.FindAsync(id);
+            var entity = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
             if (entity == null) return NotFound();
-            _db.Clients.Remove(entity);
-            await _db.SaveChangesAsync();
-            return NoContent();
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                await DeleteClientCascadeAsync(new[] { id });
+                await tx.CommitAsync();
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "Delete client {Id} failed", id);
+                return StatusCode(500, "Не вдалося видалити клієнта.");
+            }
         }
 
-        // batch-delete — тільки superadmin та admin
+        // batch-delete — тільки superadmin та admin (теж каскадно)
         [HttpPost("batch-delete")]
         [Authorize(Roles = "superadmin,admin")]
         public async Task<IActionResult> BatchDelete([FromBody] List<int> ids)
         {
             if (ids == null || ids.Count == 0) return BadRequest("No ids provided");
-            var clients = await _db.Clients.Where(c => ids.Contains(c.Id)).ToListAsync();
-            _db.Clients.RemoveRange(clients);
-            await _db.SaveChangesAsync();
-            _logger.LogInformation("Batch deleted {Count} clients", clients.Count);
-            return Ok(new { deleted = clients.Count });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var existing = await _db.Clients.Where(c => ids.Contains(c.Id)).Select(c => c.Id).ToListAsync();
+                await DeleteClientCascadeAsync(existing);
+                await tx.CommitAsync();
+                _logger.LogInformation("Batch deleted {Count} clients (with related repairs/sales)", existing.Count);
+                return Ok(new { deleted = existing.Count });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "Batch delete clients failed");
+                return StatusCode(500, "Не вдалося видалити вибраних клієнтів.");
+            }
         }
 
         // GET history — всі ролі

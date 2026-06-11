@@ -8,6 +8,12 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Хостинг (Railway) передає порт через змінну середовища PORT.
+// Слухаємо саме його на 0.0.0.0, інакше платформа не зможе направити трафік.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -36,8 +42,10 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-var cs = builder.Configuration.GetConnectionString("DefaultConnection")
-      ?? Environment.GetEnvironmentVariable("CONNECTION_STRING");
+// Спочатку беремо рядок підключення зі змінної середовища (Railway),
+// і лише як запасний варіант — з appsettings.json (локальна розробка).
+var cs = Environment.GetEnvironmentVariable("CONNECTION_STRING")
+      ?? builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(cs))
     throw new InvalidOperationException("Connection string not configured.");
 

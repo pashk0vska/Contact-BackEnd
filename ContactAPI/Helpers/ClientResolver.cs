@@ -15,7 +15,8 @@ namespace Contact.API.Helpers
                 .Where(c => c.FullName.ToLower() == name.ToLower() || (clientPhone != null && clientPhone != "" && c.Phone == clientPhone))
                 .Select(c => new { c.Id }).FirstOrDefaultAsync();
             if (existing != null) return new ResolveResult { Success = true, ClientId = existing.Id };
-            var newClient = new Client { FullName = name, Phone = (clientPhone ?? "").Trim(), Email = (clientEmail ?? "").Trim(), History = "" };
+            // Клієнт, створений через CRM (продаж/ремонт) — походження "crm".
+            var newClient = new Client { FullName = name, Phone = (clientPhone ?? "").Trim(), Email = (clientEmail ?? "").Trim(), History = "", Source = "crm" };
             db.Clients.Add(newClient); await db.SaveChangesAsync();
             return new ResolveResult { Success = true, ClientId = newClient.Id };
         }

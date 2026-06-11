@@ -19,7 +19,8 @@ namespace Contact.API.Controllers
             _db = db; _logger = logger;
         }
 
-        public record ClientListItemDto(int Id, string FullName, string Phone, string Email);
+        // FromConfigurator = true, якщо клієнта створено в Конфігураторі ПК (Source == "configurator").
+        public record ClientListItemDto(int Id, string FullName, string Phone, string Email, bool FromConfigurator);
 
         // GET — всі ролі
         [HttpGet]
@@ -49,8 +50,9 @@ namespace Contact.API.Controllers
             };
 
             var total = await query.CountAsync();
+            // FromConfigurator читаємо з тієї ж вибірки — без додаткового запиту до БД.
             var items = await query.Skip((page - 1) * pageSize).Take(pageSize)
-                .Select(c => new ClientListItemDto(c.Id, c.FullName, c.Phone, c.Email))
+                .Select(c => new ClientListItemDto(c.Id, c.FullName, c.Phone, c.Email, c.Source == "configurator"))
                 .ToListAsync();
 
             return Ok(new { items, total, page, pageSize });
@@ -66,12 +68,14 @@ namespace Contact.API.Controllers
             if (string.IsNullOrWhiteSpace(model.Email)) return BadRequest("Email is required.");
 
             model.Email = model.Email.Trim();
+            model.Source = "crm";   // клієнт, створений у CRM (Конфігуратор виставляє "configurator" сам)
             _db.Clients.Add(model);
             await _db.SaveChangesAsync();
             return Ok(new { id = model.Id });
         }
 
         // PUT — всі ролі (email тепер обов'язковий)
+        // Source НЕ чіпаємо — редагування в CRM не змінює походження клієнта.
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] Client model)
         {

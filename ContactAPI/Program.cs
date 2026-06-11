@@ -95,9 +95,14 @@ using (var scope = app.Services.CreateScope())
     EnsureColumn(db, "repairs",      "MasterId",     "int NULL");        // T1
     EnsureColumn(db, "sale_headers", "MasterId",     "int NULL");        // T1
     EnsureColumn(db, "sale_items",   "Type",         "varchar(20) NULL");   // T6
+    EnsureColumn(db, "clients",      "Source",       "varchar(20) NULL");   // Інтеграція з Конфігуратором ПК: походження клієнта (crm/configurator)
 
     // Міграція: оновити роль "user" -> "master" для існуючих користувачів
     try { db.Database.ExecuteSqlRaw("UPDATE users SET Role = 'master' WHERE Role = 'user'"); } catch { }
+
+    // Бекфіл: наявні клієнти без джерела вважаються створеними в CRM.
+    // Ідемпотентно: після першого запуску NULL-рядків не лишається, рядки Конфігуратора ('configurator') не чіпаються.
+    try { db.Database.ExecuteSqlRaw("UPDATE clients SET Source = 'crm' WHERE Source IS NULL OR Source = ''"); } catch { }
 
     // Seed superadmin (БЕЗ авто-промоушену admin -> superadmin)
     SeedSuperAdmin(db);

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Contact.API.Data;
@@ -22,8 +22,8 @@ namespace Contact.API.Controllers
         }
 
         const string ShopName = "КОНТАКТ";
-        const string ShopSub  = "Сервісний центр · ФОП Марціновський А.В.";
-        const string ShopAddr = "м. Городенка · +380 67 000 00 00";
+        const string ShopSub  = "Сервісний центр · ФОП Марціновський О.В.";
+        const string ShopAddr = "м. Коломия, вул. Валова 36В · +380 96 664 30 00";
 
         [HttpGet("sale/{id}/pdf")]
         public async Task<IActionResult> GetSaleReceiptPdf(int id)

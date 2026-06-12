@@ -74,7 +74,7 @@ namespace Contact.API.Controllers
                                    price = h.Total
                                }).Take(8).ToListAsync();
 
-            // ===== profitSeries — дохід (продажі + ремонти) по днях за останні 14 днів (T4) =====
+            // profitSeries — дохід (продажі + ремонти) по днях за останні 14 днів
             var tz = TimeZoneInfo.Local;
             var nlNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
             var seriesStartLocal = nlNow.Date.AddDays(-13);
@@ -108,7 +108,7 @@ namespace Contact.API.Controllers
             var activeRepairs = await _db.Repairs.AsNoTracking()
                 .CountAsync(r => r.Status != "done" && r.Status != "issued" && r.Status != "canceled");
 
-            // ===== Останні ремонти (Блок C) =====
+            // Останні ремонти
             var recentRepairs = await (from r in _db.Repairs.AsNoTracking()
                                        join c0 in _db.Clients.AsNoTracking() on r.ClientId equals c0.Id into gc
                                        from c in gc.DefaultIfEmpty()

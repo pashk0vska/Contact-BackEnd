@@ -99,7 +99,7 @@ namespace Contact.API.Controllers
             return Ok(new { items, total, page = rq.page, pageSize = rq.pageSize });
         }
 
-        // GET /api/repairs/{id} — всі ролі (повні деталі + контакти клієнта + майстер) — T2
+        // GET /api/repairs/{id} — всі ролі (повні деталі + контакти клієнта + майстер)
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetRepairById(int id)
         {

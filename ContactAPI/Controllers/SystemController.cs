@@ -13,7 +13,7 @@ namespace Contact.API.Controllers
         private readonly AppDbContext _db;
         public SystemController(AppDbContext db) => _db = db;
 
-        // GET /api/System/db-status — короткий стан БД для Налаштувань (T7 / Блок A)
+        // GET /api/System/db-status — короткий стан БД для Налаштувань
         [HttpGet("db-status")]
         public async Task<IActionResult> DbStatus()
         {

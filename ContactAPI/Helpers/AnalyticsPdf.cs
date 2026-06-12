@@ -37,7 +37,7 @@ namespace Contact.API.Helpers
             return doc.GeneratePdf();
         }
 
-        // ===== Шапка з логотипом =====
+        // Шапка з логотипом
         private static void Header(IContainer c, ReportData d) =>
             c.Background(BrandAssets.Ink).PaddingHorizontal(36).PaddingVertical(18).Row(row =>
             {
@@ -61,7 +61,7 @@ namespace Contact.API.Helpers
                 });
             });
 
-        // ===== KPI-плитки =====
+        // KPI-плитки
         private static void KpiGrid(IContainer c, ReportData d)
         {
             var k = d.Kpis;
@@ -99,7 +99,7 @@ namespace Contact.API.Helpers
                 else col.Item().PaddingTop(2).Text("—").FontSize(7.5f).FontColor("#C2CAD1");
             });
 
-        // ===== Дохід за категоріями =====
+        // Дохід за категоріями
         private static void CategorySection(IContainer c, ReportData d) =>
             c.Column(col =>
             {
@@ -115,7 +115,7 @@ namespace Contact.API.Helpers
                     footer: r => { r.TextBold("Разом"); r.Money(d.ByCategory.Sum(x => x.Value), true); r.Text(""); });
             });
 
-        // ===== Динаміка по днях (стовпчикова діаграма) =====
+        // Динаміка по днях (стовпчикова діаграма)
         private static void TrendSection(IContainer c, ReportData d) =>
             c.Column(col =>
             {
@@ -145,7 +145,7 @@ namespace Contact.API.Helpers
                 });
             });
 
-        // ===== ТОП товарів =====
+        // ТОП товарів
         private static void ProductsSection(IContainer c, ReportData d) =>
             c.Column(col =>
             {
@@ -164,7 +164,7 @@ namespace Contact.API.Helpers
                     })).ToList());
             });
 
-        // ===== Послуги + оплати =====
+        // Послуги + оплати
         private static void SalesExtraSection(IContainer c, ReportData d) =>
             c.Row(row =>
             {
@@ -187,7 +187,7 @@ namespace Contact.API.Helpers
                     });
             });
 
-        // ===== Ремонти =====
+        // Ремонти
         private static void RepairsSection(IContainer c, ReportData d) =>
             c.Column(col =>
             {
@@ -216,7 +216,7 @@ namespace Contact.API.Helpers
                     .FontSize(8.5f).FontColor(BrandAssets.TextMuted);
             });
 
-        // ===== Персонал =====
+        // Персонал
         private static void StaffSection(IContainer c, ReportData d) =>
             c.Column(col =>
             {
@@ -234,7 +234,7 @@ namespace Contact.API.Helpers
                     })).ToList());
             });
 
-        // ===== Допоміжні =====
+        // Допоміжні
         private static void Title(ColumnDescriptor col, string text)
         {
             col.Item().PaddingBottom(6).Row(r =>

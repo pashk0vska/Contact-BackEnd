@@ -42,7 +42,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Спочатку беремо рядок підключення зі змінної середовища (Railway),
+// Спочатку беремо рядок підключення зі змінної середовища (Railway)
 // і лише як запасний варіант — з appsettings.json (локальна розробка).
 var cs = Environment.GetEnvironmentVariable("CONNECTION_STRING")
       ?? builder.Configuration.GetConnectionString("DefaultConnection");
@@ -90,19 +90,19 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// --- Database initialization & superadmin seed ---
+// Database initialization & superadmin seed
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
 
     // Безпечне додавання колонок (працює і на MySQL 8, і на MariaDB).
-    // ПРИМІТКА: 'ALTER TABLE ... ADD COLUMN IF NOT EXISTS' — синтаксис MariaDB,
+    // ПРИМІТКА: 'ALTER TABLE ... ADD COLUMN IF NOT EXISTS' — синтаксис MariaDB
     // у MySQL 8 він падає. Тому перевіряємо наявність колонки через information_schema.
     EnsureColumn(db, "users",        "RecoveryKeys", "longtext NULL");
-    EnsureColumn(db, "repairs",      "MasterId",     "int NULL");        // T1
-    EnsureColumn(db, "sale_headers", "MasterId",     "int NULL");        // T1
-    EnsureColumn(db, "sale_items",   "Type",         "varchar(20) NULL");   // T6
+    EnsureColumn(db, "repairs",      "MasterId",     "int NULL");
+    EnsureColumn(db, "sale_headers", "MasterId",     "int NULL");
+    EnsureColumn(db, "sale_items",   "Type",         "varchar(20) NULL");
     EnsureColumn(db, "clients",      "Source",       "varchar(20) NULL");   // Інтеграція з Конфігуратором ПК: походження клієнта (crm/configurator)
 
     // Міграція: оновити роль "user" -> "master" для існуючих користувачів
@@ -122,7 +122,7 @@ app.UseAuthorization();
 app.MapControllers();
 app.Run();
 
-// --- Idempotent column add, сумісне з MySQL 8 та MariaDB ---
+// Idempotent column add, сумісне з MySQL 8 та MariaDB
 static void EnsureColumn(AppDbContext db, string table, string column, string ddl)
 {
     try
@@ -158,14 +158,14 @@ static void EnsureColumn(AppDbContext db, string table, string column, string dd
     }
 }
 
-// --- Seed superadmin ---
+// Seed superadmin
 static void SeedSuperAdmin(AppDbContext db)
 {
     // Якщо superadmin уже є — нічого не робимо.
     var existing = db.Users.FirstOrDefault(u => u.Role == "superadmin");
     if (existing != null) return;
 
-    // ВАЖЛИВО: НЕ промоутимо існуючого admin до superadmin —
+    // ВАЖЛИВО: НЕ промоутимо існуючого admin до superadmin
     // інакше ролі superadmin та admin "злипаються" в один акаунт.
     var superadmin = new User
     {

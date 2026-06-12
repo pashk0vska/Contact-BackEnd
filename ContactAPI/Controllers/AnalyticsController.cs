@@ -40,7 +40,7 @@ namespace Contact.API.Controllers
             var income   = salesRev + repRev;
             var avgCheck = salesCount > 0 ? decimal.Round(salesRev / salesCount, 2) : 0m;
 
-            // ===== Топ товарів + дохід за категоріями + топ послуг (Блок B) =====
+            // Топ товарів + дохід за категоріями + топ послуг
             List<object> topItems = new();
             List<object> topServices = new();
             decimal catProducts = 0m, catServices = 0m, catBuilds = 0m;
@@ -78,7 +78,7 @@ namespace Contact.API.Controllers
                     .ToList();
             }
 
-            // ===== Ремонти: розподіл за статусами + топ типів пристроїв (для режиму «Лише ремонти») =====
+            // Ремонти: розподіл за статусами + топ типів пристроїв (для режиму «Лише ремонти»)
             List<object> repairsByStatus = new();
             List<object> repairsByDevice = new();
             if (incR)

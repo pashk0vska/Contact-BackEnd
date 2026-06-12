@@ -134,7 +134,7 @@ namespace Contact.API.Controllers
             public string Name { get; set; } = "";
             public int Qty { get; set; }
             public decimal Price { get; set; }
-            public string? Type { get; set; }   // T6: "product" | "service"
+            public string? Type { get; set; }   // "product" | "service"
         }
 
         public class SaleCreateDto
@@ -146,7 +146,7 @@ namespace Contact.API.Controllers
             public string  Status      { get; set; } = "done";
             public string? Note        { get; set; }
             public SaleCreateItemDto Item { get; set; } = new();          // сумісність зі старим одиничним форматом
-            public List<SaleCreateItemDto>? Items { get; set; }           // T6: кілька позицій
+            public List<SaleCreateItemDto>? Items { get; set; }           // кілька позицій
             public string? ClientPhone { get; set; }
             public string? ClientEmail { get; set; }
             public bool UpsertService  { get; set; } = false;
@@ -238,7 +238,7 @@ namespace Contact.API.Controllers
             // майстра оновлюємо лише якщо переданий (щоб старі форми без поля не скидали його)
             if (dto.MasterId.HasValue) header.MasterId = dto.MasterId;
 
-            // T6: повністю переписуємо позиції (додавання/видалення/зміна)
+            // повністю переписуємо позиції (додавання/видалення/зміна)
             _db.SaleItems.RemoveRange(_db.SaleItems.Where(i => i.SaleId == id));
             await _db.SaveChangesAsync();
             foreach (var it in items)
@@ -256,7 +256,7 @@ namespace Contact.API.Controllers
             return NoContent();
         }
 
-        // POST /api/Sales/{id}/duplicate — дублювати продаж із тими ж позиціями (Блок D)
+        // POST /api/Sales/{id}/duplicate — дублювати продаж із тими ж позиціями
         [HttpPost("{id:int}/duplicate")]
         public async Task<IActionResult> DuplicateSale(int id)
         {

@@ -46,7 +46,7 @@ namespace Contact.API.Controllers
             });
         }
 
-        // POST /api/Auth/change-password — зміна ВЛАСНОГО пароля (будь-яка роль над своїм акаунтом) — Блок A
+        // POST /api/Auth/change-password — зміна ВЛАСНОГО пароля (будь-яка роль над своїм акаунтом)
         [Authorize]
         [HttpPost("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)

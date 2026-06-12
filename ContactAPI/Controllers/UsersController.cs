@@ -42,7 +42,7 @@ namespace Contact.API.Controllers
 
         // POST /api/users — створення користувача
         // superadmin → може створювати admin та master
-        // admin      → може створювати тільки master
+        // admin → може створювати тільки master
         [HttpPost]
         [Authorize(Roles = "superadmin,admin")]
         public IActionResult CreateUser([FromBody] CreateUserRequest req)
@@ -93,7 +93,7 @@ namespace Contact.API.Controllers
 
         // PUT /api/users/{id} — редагування користувача (логін, email, пароль, роль)
         // superadmin → може редагувати admin та master (роль міняє лише superadmin)
-        // admin      → може редагувати тільки master, без зміни ролі
+        // admin → може редагувати тільки master, без зміни ролі
         // superadmin-ціль недоторкана через API
         [HttpPut("{id:int}")]
         [Authorize(Roles = "superadmin,admin")]

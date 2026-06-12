@@ -25,7 +25,7 @@ namespace Contact.API.Helpers
             return ms.ToArray();
         }
 
-        // ================= ОГЛЯД =================
+        // ОГЛЯД
         private static void BuildOverview(XLWorkbook wb, ReportData d)
         {
             var ws = wb.Worksheets.Add("Огляд");
@@ -33,7 +33,7 @@ namespace Contact.API.Helpers
             double[] widths = { 34, 18, 18, 18, 16, 16 };
             for (int i = 0; i < widths.Length; i++) ws.Column(i + 1).Width = widths[i];
 
-            // --- Брендова шапка ---
+            // Брендова шапка
             var band = ws.Range(1, 1, 3, 6);
             band.Style.Fill.BackgroundColor = XLColor.FromHtml(BrandAssets.Ink);
             ws.Row(1).Height = 16; ws.Row(2).Height = 26; ws.Row(3).Height = 16;
@@ -59,7 +59,7 @@ namespace Contact.API.Helpers
             ws.Range(r, 4, r + 1, 4).Style.Font.Bold = true;
             r += 3;
 
-            // --- KPI ---
+            // KPI
             Section(ws, ref r, "Ключові показники", 6);
             int hRow = r;
             Head(ws, r, new[] { "Показник", "Значення", "Поперед. період", "Δ %" }, 1);
@@ -97,7 +97,7 @@ namespace Contact.API.Helpers
             Boxed(ws, hRow, 1, r - 1, 4, kpiStart);
 
             r += 1;
-            // --- Категорії ---
+            // Категорії
             Section(ws, ref r, "Структура доходу за категоріями", 6);
             int cHead = r;
             Head(ws, r, new[] { "Категорія", "Сума", "Частка", "Візуалізація" }, 1);
@@ -121,7 +121,7 @@ namespace Contact.API.Helpers
                 r++;
             }
 
-            // --- Способи оплати + Статистика чеків ---
+            // Способи оплати + Статистика чеків
             if (d.IncludeSales)
             {
                 r += 1;
@@ -165,7 +165,7 @@ namespace Contact.API.Helpers
             ws.SheetView.FreezeRows(3);
         }
 
-        // ================= ДИНАМІКА =================
+        // ДИНАМІКА
         private static void BuildTrend(XLWorkbook wb, ReportData d)
         {
             var ws = wb.Worksheets.Add("Динаміка");
@@ -218,7 +218,7 @@ namespace Contact.API.Helpers
             ws.SheetView.FreezeRows(head + 1);
         }
 
-        // ================= ТОВАРИ / ПОСЛУГИ =================
+        // ТОВАРИ / ПОСЛУГИ
         private static void BuildProducts(XLWorkbook wb, ReportData d)
         {
             var ws = wb.Worksheets.Add("Товари");
@@ -271,7 +271,7 @@ namespace Contact.API.Helpers
             ws.SheetView.FreezeRows(head + 1);
         }
 
-        // ================= РЕМОНТИ =================
+        // РЕМОНТИ
         private static void BuildRepairs(XLWorkbook wb, ReportData d)
         {
             var ws = wb.Worksheets.Add("Ремонти");
@@ -319,7 +319,7 @@ namespace Contact.API.Helpers
             ws.SheetView.FreezeRows(top + 1);
         }
 
-        // ================= ПЕРСОНАЛ =================
+        // ПЕРСОНАЛ
         private static void BuildStaff(XLWorkbook wb, ReportData d)
         {
             var ws = wb.Worksheets.Add("Персонал");
@@ -351,7 +351,7 @@ namespace Contact.API.Helpers
             ws.SheetView.FreezeRows(head + 1);
         }
 
-        // ================= ДОПОМІЖНІ =================
+        // ДОПОМІЖНІ
         private static void Section(IXLWorksheet ws, ref int row, string text, int lastCol, int col = 1)
         {
             var rng = ws.Range(row, col, row, lastCol);

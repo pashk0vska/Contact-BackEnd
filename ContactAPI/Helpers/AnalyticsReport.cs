@@ -3,7 +3,7 @@ using Contact.API.Data;
 
 namespace Contact.API.Helpers
 {
-    // ===== DTO-моделі звіту =====
+    // DTO-моделі звіту
     public class Metric
     {
         public string Label = "";
@@ -121,7 +121,7 @@ namespace Contact.API.Helpers
                 GeneratedAt = nowLocal
             };
 
-            // ===== Витягуємо «сирі» дані у пам'ять (невеликі обсяги) =====
+            // Витягуємо «сирі» дані у пам'ять (невеликі обсяги)
             var sales = incS
                 ? await db.SaleHeaders.AsNoTracking()
                     .Where(h => h.Date >= startUtc && h.Date < endUtc)
@@ -151,7 +151,7 @@ namespace Contact.API.Helpers
             d.NewClients = await db.Clients.AsNoTracking()
                 .Where(c => c.CreatedAt >= startUtc && c.CreatedAt < endUtc).CountAsync();
 
-            // ===== KPI =====
+            // KPI
             d.SalesCount = sales.Count;
             d.SalesRevenue = sales.Sum(s => s.Total);
             d.RepairsCount = repairs.Count;
@@ -162,7 +162,7 @@ namespace Contact.API.Helpers
             d.TotalItems = items.Sum(i => i.Qty);
             d.ItemsPerSale = d.SalesCount > 0 ? decimal.Round((decimal)d.TotalItems / d.SalesCount, 2) : 0m;
 
-            // ===== Попередній період (агрегати) =====
+            // Попередній період (агрегати)
             decimal prevSalesRev = 0m, prevRepRev = 0m;
             int prevSalesCount = 0, prevRepCount = 0, prevNewCl = 0;
             if (incS)
@@ -188,7 +188,7 @@ namespace Contact.API.Helpers
             if (incS) d.Kpis.Add(new Metric { Label = "Позицій у продажах", Current = d.TotalItems });
             if (incS) d.Kpis.Add(new Metric { Label = "Позицій на чек", Current = d.ItemsPerSale });
 
-            // ===== Дохід за категоріями =====
+            // Дохід за категоріями
             decimal catProducts = 0m, catServices = 0m, catBuilds = 0m;
             foreach (var r in items)
             {
@@ -211,7 +211,7 @@ namespace Contact.API.Helpers
             foreach (var c in cats) c.Share = catTotal > 0 ? decimal.Round(c.Value / catTotal * 100m, 1) : 0m;
             d.ByCategory = cats.Where(c => c.Value > 0 || (c.Name == "Ремонти" && incR) || (c.Name != "Ремонти" && incS)).ToList();
 
-            // ===== ТОП товарів/послуг =====
+            // ТОП товарів/послуг
             if (incS)
             {
                 var grouped = items.GroupBy(x => x.Name)
@@ -235,7 +235,7 @@ namespace Contact.API.Helpers
                     .Select(g => new ServiceRow { Name = g.Key, Count = g.Sum(x => x.Qty), Sum = g.Sum(x => x.Price * x.Qty) })
                     .OrderByDescending(x => x.Count).Take(8).ToList();
 
-                // ===== Способи оплати =====
+                // Способи оплати
                 var pays = sales.GroupBy(s => PaymentUa(s.Payment))
                     .Select(g => new PaymentRow { Method = g.Key, Count = g.Count(), Sum = g.Sum(x => x.Total) })
                     .OrderByDescending(x => x.Sum).ToList();
@@ -243,7 +243,7 @@ namespace Contact.API.Helpers
                 foreach (var p in pays) p.Share = paySum > 0 ? decimal.Round(p.Sum / paySum * 100m, 1) : 0m;
                 d.Payments = pays;
 
-                // ===== Статистика чеків =====
+                // Статистика чеків
                 if (sales.Count > 0)
                 {
                     var totals = sales.Select(s => s.Total).OrderBy(x => x).ToList();
@@ -254,7 +254,7 @@ namespace Contact.API.Helpers
                 }
             }
 
-            // ===== Ремонти: статуси / пристрої =====
+            // Ремонти: статуси / пристрої
             if (incR)
             {
                 var byStatus = repairs.GroupBy(r => RepStatusUa(r.Status))
@@ -271,7 +271,7 @@ namespace Contact.API.Helpers
                 d.CompletionRate = d.RepairsCount > 0 ? decimal.Round((decimal)doneCount / d.RepairsCount * 100m, 1) : 0m;
             }
 
-            // ===== Ефективність персоналу =====
+            // Ефективність персоналу
             var staff = new Dictionary<string, MasterRow>();
             MasterRow GetM(int? id)
             {
@@ -283,7 +283,7 @@ namespace Contact.API.Helpers
             if (incR) foreach (var r in repairs) { var m = GetM(r.MasterId); m.RepairsCount++; m.RepairsSum += r.TotalCost; }
             d.StaffPerformance = staff.Values.OrderByDescending(x => x.Total).ToList();
 
-            // ===== Динаміка по днях + найкращий день + дні тижня =====
+            // Динаміка по днях + найкращий день + дні тижня
             var byDay = new Dictionary<DateTime, DayRow>();
             for (var dt = startLocal; dt < endLELocal; dt = dt.AddDays(1)) byDay[dt] = new DayRow { Date = dt };
             DateTime LocalDate(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), tz).Date;
